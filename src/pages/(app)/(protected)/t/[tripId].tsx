@@ -1,6 +1,7 @@
 /**
  * /t/:tripId — the trip (SPEC §10): Crew, Destinations, Results, and Book
- * (enabled once a destination is locked).
+ * (enabled once there are results: the fare watch lives there, and booking
+ * once a destination is locked).
  *
  * Not-found: the room only sends trips whose memberIds include me, so a
  * trip I'm not on looks exactly like one that doesn't exist.
@@ -51,9 +52,10 @@ function Trip({ tripId, onRetry }: { tripId: string; onRetry: () => void }) {
   if (!trip || !userId) return <TripNotFound />
   const tripStatus = trip.data.status
   const locked = tripStatus === 'locked'
+  const bookOpen = locked || tripStatus === 'results'
   const defaultTab = locked ? 'book' : tripStatus === 'results' || tripStatus === 'searching' ? 'results' : 'crew'
-  // A stale 'book' choice can't outlive the lock (no unlock today, but stay safe).
-  const current = tab === 'book' && !locked ? defaultTab : (tab ?? defaultTab)
+  // A 'book' choice can't outlive results (e.g. a new search started), so fall back.
+  const current = tab === 'book' && !bookOpen ? defaultTab : (tab ?? defaultTab)
 
   return (
     <>
@@ -79,7 +81,7 @@ function Trip({ tripId, onRetry }: { tripId: string; onRetry: () => void }) {
           <TabsTrigger value="crew">Crew</TabsTrigger>
           <TabsTrigger value="destinations">Destinations</TabsTrigger>
           <TabsTrigger value="results">Results</TabsTrigger>
-          <TabsTrigger value="book" disabled={!locked} title={locked ? undefined : 'Opens when a destination is locked'}>
+          <TabsTrigger value="book" disabled={!bookOpen} title={bookOpen ? undefined : 'Opens once there are fare results'}>
             Book
           </TabsTrigger>
         </TabsList>

@@ -36,6 +36,7 @@ test('Alice locks; both see Book; Bob books and Alice sees it live; ghost ticked
   expect(await act(alice, baseURL!, 'lockTrip', { tripId, iata: 'BNA' })).toMatchObject({ success: false, code: 'not_ready' })
 
   await Promise.all([alice.page.goto(`/t/${tripId}`), bob.page.goto(`/t/${tripId}`)])
+  // Before results there's nothing to book or watch.
   await expect(alice.page.getByRole('tab', { name: 'Book' })).toBeDisabled({ timeout: 15_000 })
   expect(await act(alice, baseURL!, 'startSearch', { tripId })).toMatchObject({ success: true })
   await waitForTrip(alice, baseURL!, tripId, (t) => t.status === 'results')
@@ -55,7 +56,9 @@ test('Alice locks; both see Book; Bob books and Alice sees it live; ghost ticked
   await expect(alice.page.getByRole('dialog')).toContainText('Lock Nashville (BNA)?')
   await alice.page.getByRole('button', { name: 'Cancel' }).click()
   await expect(alice.page.getByRole('dialog')).toHaveCount(0)
-  await expect(bob.page.getByRole('tab', { name: 'Book' })).toBeDisabled()
+  // Book opens with results (Phase 7: the fare watch lives there), but nothing is locked.
+  await expect(bob.page.getByRole('tab', { name: 'Book' })).toBeEnabled()
+  await expect(bob.page.getByTestId('locked-destination')).toHaveCount(0)
 
   await bnaCard.getByTestId('lock-button').click()
   await alice.page.getByRole('button', { name: 'Lock and email everyone' }).click()
@@ -95,9 +98,9 @@ test('Alice locks; both see Book; Bob books and Alice sees it live; ghost ticked
   await bob.page.getByRole('button', { name: 'Mark me as not booked' }).click()
   await expect(alice.page.getByTestId('booked-count')).toHaveText('1 of 3 booked')
 
-  // The watch toggle is shown to the organizer, labelled as coming next, and inert.
-  await expect(alice.page.getByTestId('watch-toggle')).toContainText('Daily fare watch: coming next')
-  await expect(alice.page.getByTestId('watch-toggle').getByRole('switch')).toBeDisabled()
+  // The watch switch is the organizer's, live and on by default (tests/watch.spec.ts covers it in depth).
+  await expect(alice.page.getByTestId('watch-toggle')).toContainText('Daily fare watch')
+  await expect(alice.page.getByTestId('watch-toggle').getByRole('switch')).toBeEnabled()
   await expect(bob.page.getByTestId('watch-toggle')).toHaveCount(0)
 
   // A retry of the lock emails nobody twice.

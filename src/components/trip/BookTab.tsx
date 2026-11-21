@@ -1,6 +1,8 @@
 /**
- * Book tab (SPEC §3.8, §10): the locked destination, the viewer's own fare
- * and booking link, and a live group checklist.
+ * Book tab (SPEC §3.8, §3.9, §10): the locked destination, the viewer's own
+ * fare and booking link, a live group checklist, and the fare watch. Before
+ * a lock (status results) it shows only the fare watch for the top of the
+ * shortlist.
  *
  * Who can tick what: each member writes `booked` on their OWN travelers row
  * (writableFields, `update: 'own'`); ghost rows can only be changed by the
@@ -10,7 +12,7 @@
 import { useState } from 'react'
 import { useMutations, useQuery, type RecordData } from 'deepspace'
 import { Check, ExternalLink, Home, Mail, PlaneTakeoff } from 'lucide-react'
-import { Badge, Button, Label, Switch, cn, useToast } from '@/components/ui'
+import { Badge, Button, cn, useToast } from '@/components/ui'
 import { EmptyNote, ErrorState, LoadingState, Retryable } from '@/components/AsyncState'
 import { useAction } from '@/hooks/useAction'
 import { googleFlightsUrl, normalizeHomes } from '@/lib/flights'
@@ -18,6 +20,7 @@ import { dateRange } from '@/lib/format'
 import { formatDuration } from '@/lib/ranking'
 import { clockTime, safeBookingUrl, stopsLabel, usd, type FareRow } from '@/lib/results'
 import { isGhostId, type CandidateData, type TravelerData, type TripData } from '@/lib/types'
+import { FareWatch } from './FareWatch'
 
 interface LockReport {
   emails: { sent: number; alreadySent: number; noEmail: number; capped: number; failed: number; mocked: boolean } | null
@@ -49,9 +52,12 @@ function BookContent({ trip, me, onRetry }: { trip: RecordData<TripData>; me: st
 
   if (trip.data.status !== 'locked' || !iata) {
     return (
-      <EmptyNote title="No destination locked yet">
-        When the organizer locks a destination on the Results tab, everyone books here.
-      </EmptyNote>
+      <div className="flex flex-col gap-4" data-testid="book">
+        <EmptyNote title="No destination locked yet">
+          When the organizer locks a destination on the Results tab, everyone books here.
+        </EmptyNote>
+        {trip.data.status === 'results' && <FareWatch trip={trip} me={me} />}
+      </div>
     )
   }
   const all = [travelers, candidates, fares]
@@ -90,6 +96,8 @@ function BookContent({ trip, me, onRetry }: { trip: RecordData<TripData>; me: st
       )}
 
       <Checklist tripId={tripId} rows={rows} me={me} isOrganizer={isOrganizer} />
+
+      <FareWatch trip={trip} me={me} />
 
       {isOrganizer && <OrganizerTools trip={trip} iata={iata} />}
     </div>
@@ -325,7 +333,7 @@ function OrganizerTools({ trip, iata }: { trip: RecordData<TripData>; iata: stri
   }
 
   return (
-    <section className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4 sm:p-5" aria-label="Organizer tools">
+    <section className="rounded-lg border border-border bg-card p-4 sm:p-5" aria-label="Organizer tools">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
           Everyone got an email with their own booking link when you locked. Resending only emails people who didn’t get one.
@@ -342,23 +350,6 @@ function OrganizerTools({ trip, iata }: { trip: RecordData<TripData>; iata: stri
           {!resend.pending && <Mail aria-hidden />}
           Email booking links again
         </Button>
-      </div>
-      <div className="flex items-start gap-3 border-t border-border pt-4" data-testid="watch-toggle">
-        <Switch
-          id="watch-switch"
-          checked={trip.data.watchEnabled === 1}
-          disabled
-          aria-describedby="watch-hint"
-          className="data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
-        />
-        <div>
-          <Label htmlFor="watch-switch" className="text-sm font-medium">
-            Daily fare watch: coming next
-          </Label>
-          <p id="watch-hint" className="text-xs text-muted-foreground">
-            A daily price check that emails the group when fares drop.
-          </p>
-        </div>
       </div>
     </section>
   )
