@@ -22,6 +22,7 @@ import { travelersSchema, TRAVELER_WRITABLE_FIELDS } from './travelers-schema'
 import { tripsSchema } from './trips-schema'
 import { usageSchema } from './usage-schema'
 import { fareCacheSchema } from './fare-cache-schema'
+import { emailLogSchema } from './email-log-schema'
 import { usersSchema } from './users-schema'
 import { votesSchema } from './votes-schema'
 
@@ -42,6 +43,7 @@ describe('schema set', () => {
       [
         'budgets',
         'candidates',
+        'emailLog',
         'fareCache',
         'fareSnapshots',
         'fares',
@@ -158,6 +160,30 @@ describe('fareCache (server-only, written by the fare-search job)', () => {
     }
     expect(Object.keys(fareCacheSchema.permissions).sort()).toEqual(['*', 'admin', 'member', 'viewer'])
     expect(fareCacheSchema.uniqueOn).toEqual(['key'])
+  })
+})
+
+describe('emailLog (server-only, written by lockTrip / the watch job)', () => {
+  const row = rec({ key: 'lock|t1|BNA|' + ALICE, kind: 'lock', tripId: 't1', userId: ALICE, status: 'sent' })
+
+  it('is unreadable and unwritable by every role, admin included, even for the recipient', () => {
+    for (const role of [...ROLES, 'some-new-role']) {
+      for (const userId of [ALICE, OUTSIDER]) {
+        expect(canRead(emailLogSchema, role, row, userId), `${role} read`).toBe(false)
+        expect(canUpdate(emailLogSchema, role, row, userId), `${role} update`).toBe(false)
+        expect(canDelete(emailLogSchema, role, row, userId), `${role} delete`).toBe(false)
+      }
+      expect(canCreate(emailLogSchema, role), `${role} create`).toBe(false)
+    }
+    expect(Object.keys(emailLogSchema.permissions).sort()).toEqual(['*', 'admin', 'member', 'viewer'])
+    expect(emailLogSchema.uniqueOn).toEqual(['key'])
+  })
+
+  it('stores no address or name column', () => {
+    const names = emailLogSchema.columns.map((c) => c.name)
+    expect(names).not.toContain('email')
+    expect(names).not.toContain('to')
+    expect(names).not.toContain('displayName')
   })
 })
 

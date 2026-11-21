@@ -19,6 +19,7 @@ import { votesSchema } from './schemas/votes-schema'
 import { fareSnapshotsSchema } from './schemas/fare-snapshots-schema'
 import { usageSchema } from './schemas/usage-schema'
 import { fareCacheSchema } from './schemas/fare-cache-schema'
+import { emailLogSchema } from './schemas/email-log-schema'
 
 export const schemas: CollectionSchema[] = [
   usersSchema,
@@ -32,4 +33,5 @@ export const schemas: CollectionSchema[] = [
   fareSnapshotsSchema,
   usageSchema,
   fareCacheSchema,
+  emailLogSchema,
 ]
