@@ -10,8 +10,24 @@
 import type { CollectionSchema } from 'deepspace/schema'
 import { usersSchema } from './schemas/users-schema'
 import { settingsSchema } from './schemas/admin-schema'
+import { tripsSchema } from './schemas/trips-schema'
+import { travelersSchema } from './schemas/travelers-schema'
+import { budgetsSchema } from './schemas/budgets-schema'
+import { candidatesSchema } from './schemas/candidates-schema'
+import { faresSchema } from './schemas/fares-schema'
+import { votesSchema } from './schemas/votes-schema'
+import { fareSnapshotsSchema } from './schemas/fare-snapshots-schema'
+import { usageSchema } from './schemas/usage-schema'
 
 export const schemas: CollectionSchema[] = [
   usersSchema,
   settingsSchema,
+  tripsSchema,
+  travelersSchema,
+  budgetsSchema,
+  candidatesSchema,
+  faresSchema,
+  votesSchema,
+  fareSnapshotsSchema,
+  usageSchema,
 ]

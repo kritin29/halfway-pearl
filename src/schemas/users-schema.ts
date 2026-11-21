@@ -3,6 +3,9 @@ import { USERS_COLUMNS, type CollectionSchema } from 'deepspace/schema'
 export const usersSchema: CollectionSchema = {
   name: 'users',
   columns: [...USERS_COLUMNS],
+  // SPEC §5 / NOTES C11: useUsers() lists only rows the caller may read
+  // (their own), not every registered user. Names come from travelers.displayName.
+  roster: 'read-policy',
   permissions: {
     viewer: { read: 'own', create: false, update: 'own', delete: false },
     member: { read: 'own', create: false, update: 'own', delete: false },

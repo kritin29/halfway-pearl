@@ -41,6 +41,24 @@ export const LIMITS = {
   maxWatchTripsPerCronRun: 10,
 } as const
 
+/** Input validation limits for action params (SPEC §5, §6). */
+export const INPUT_LIMITS = {
+  /** trips.name */
+  tripNameMax: 80,
+  /** trips.vibe */
+  vibeMax: 200,
+  /** travelers.displayName */
+  displayNameMax: 40,
+  /** travelers.homeAirports: 1..3 codes */
+  homeAirportsMax: 3,
+  /** Longest trip, outbound → return, in days. */
+  tripDaysMax: 30,
+  /** Furthest outbound date from today (UTC), in days. Google Flights shows ~11 months. */
+  outboundDaysAheadMax: 330,
+  /** trips.inviteCode length (SPEC: random, 10+ chars). */
+  inviteCodeLength: 12,
+} as const
+
 /** Same keys as LIMITS with plain number values, so tests can pass tuned limits. */
 export type Limits = { readonly [K in keyof typeof LIMITS]: number }
 
