@@ -16,23 +16,38 @@ import { knownHomeAirports } from '@/lib/airports'
 import { LIMITS } from '@/lib/limits'
 import type { CandidateData, CandidateSource, TravelerData, TripData } from '@/lib/types'
 import { AirportCombobox } from './AirportCombobox'
+import { SearchStatus } from './SearchStatus'
 
 interface Added {
   added: Array<{ iata: string; city: string; why: string; source: CandidateSource }>
 }
 
-export function DestinationsTab({ trip, me }: { trip: RecordData<TripData>; me: string }) {
-  return <Retryable>{(retry) => <DestinationsContent trip={trip} me={me} onRetry={retry} />}</Retryable>
+export function DestinationsTab({
+  trip,
+  me,
+  onSearchStarted,
+}: {
+  trip: RecordData<TripData>
+  me: string
+  onSearchStarted: () => void
+}) {
+  return (
+    <Retryable>
+      {(retry) => <DestinationsContent trip={trip} me={me} onRetry={retry} onSearchStarted={onSearchStarted} />}
+    </Retryable>
+  )
 }
 
 function DestinationsContent({
   trip,
   me,
   onRetry,
+  onSearchStarted,
 }: {
   trip: RecordData<TripData>
   me: string
   onRetry: () => void
+  onSearchStarted: () => void
 }) {
   const tripId = trip.recordId
   const isOrganizer = trip.data.organizerId === me
@@ -113,7 +128,14 @@ function DestinationsContent({
         )}
       </section>
 
-      <FindFares />
+      <FindFares
+        trip={trip}
+        isOrganizer={isOrganizer}
+        ready={ready}
+        destinations={list.length}
+        travelersWithAirports={withAirports}
+        onStarted={onSearchStarted}
+      />
     </div>
   )
 }
@@ -358,24 +380,83 @@ function CandidateList({
   )
 }
 
-/** Placeholder until fare search ships (Phase 5). */
-function FindFares() {
+/**
+ * "Find fares" (organizer): starts the fare-search job through `startSearch`,
+ * which checks every cap first. Progress comes from the trip row.
+ */
+function FindFares({
+  trip,
+  isOrganizer,
+  ready,
+  destinations,
+  travelersWithAirports,
+  onStarted,
+}: {
+  trip: RecordData<TripData>
+  isOrganizer: boolean
+  ready: boolean
+  destinations: number
+  travelersWithAirports: number
+  onStarted: () => void
+}) {
+  const toast = useToast()
+  const start = useAction<{ jobId: string }>('startSearch')
+  const { status, lastSearchAt } = trip.data
+  const searching = status === 'searching'
+
+  async function run() {
+    const res = await start.run({ tripId: trip.recordId })
+    if (!res?.success) return
+    toast.success('Fare search started', 'Results fill in for everyone as fares arrive.')
+    onStarted()
+  }
+
+  const hint = !isOrganizer
+    ? 'Only the organizer can start a fare search. Results show up for everyone.'
+    : status === 'locked'
+      ? 'This trip is locked.'
+      : travelersWithAirports < 2
+        ? 'At least 2 travelers need home airports (set them in the Crew tab).'
+        : destinations === 0
+          ? 'Add at least one destination first.'
+          : null
+  const disabled = !isOrganizer || !ready || searching || start.pending || hint !== null
+
   return (
-    <section aria-labelledby="fares-heading" className="rounded-lg border border-dashed border-border p-4 sm:p-5">
+    <section aria-labelledby="fares-heading" className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 id="fares-heading" className="text-base font-semibold">
             Fares
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Coming next: check round-trip fares for every traveler to every destination.
+            Check every traveler’s round-trip fare to every destination
+            {lastSearchAt ? `. Last checked ${new Date(lastSearchAt).toLocaleString()}.` : '.'}
           </p>
         </div>
-        <Button type="button" disabled className="w-full sm:w-auto" title="Coming next">
-          <Plane aria-hidden /> Find fares
-          <span className="rounded bg-background/20 px-1.5 py-px text-[10px] uppercase tracking-wide">coming next</span>
+        <Button
+          type="button"
+          className="w-full sm:w-auto"
+          onClick={() => void run()}
+          loading={start.pending}
+          disabled={disabled}
+        >
+          {!start.pending && <Plane aria-hidden />}
+          {searching ? 'Checking fares…' : start.pending ? 'Starting…' : lastSearchAt ? 'Find fares again' : 'Find fares'}
         </Button>
       </div>
+      {hint && (
+        <p className="text-sm text-muted-foreground" data-testid="find-fares-hint">
+          {hint}
+        </p>
+      )}
+      <SearchStatus trip={trip} />
+      <ActionErrorNote
+        title="Could not start the fare search"
+        error={start.error}
+        onRetry={() => void run()}
+        testId="search-start-error"
+      />
     </section>
   )
 }

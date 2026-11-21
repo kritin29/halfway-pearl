@@ -1,10 +1,11 @@
 /**
- * /t/:tripId — the trip (SPEC §10). Crew and Destinations exist; Results and
- * Book are disabled placeholders.
+ * /t/:tripId — the trip (SPEC §10). Crew, Destinations and Results exist;
+ * Book is a disabled placeholder.
  *
  * Not-found: the room only sends trips whose memberIds include me, so a
  * trip I'm not on looks exactly like one that doesn't exist.
  */
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth, useQuery } from 'deepspace'
 import { ArrowLeft, CalendarDays } from 'lucide-react'
@@ -12,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui'
 import { EmptyNote, ErrorState, LoadingState, Retryable } from '@/components/AsyncState'
 import { CrewTab } from '@/components/trip/CrewTab'
 import { DestinationsTab } from '@/components/trip/DestinationsTab'
+import { ResultsTab } from '@/components/trip/ResultsTab'
 import { StatusBadge } from '@/components/trip/StatusBadge'
 import { dateRange } from '@/lib/format'
 import type { TripData } from '@/lib/types'
@@ -40,6 +42,8 @@ function Trip({ tripId, onRetry }: { tripId: string; onRetry: () => void }) {
   const { userId } = useAuth()
   const { records, status, error } = useQuery<TripData>('trips', { where: { recordId: tripId }, limit: 1 })
   const trip = records[0]
+  // Opens on Results once a trip has them; "Find fares" switches there too.
+  const [tab, setTab] = useState<string | null>(null)
 
   if (status === 'loading') return <LoadingState label="Loading trip…" />
   if (status === 'error') return <ErrorState title="Could not load this trip" message={error} onRetry={onRetry} />
@@ -61,13 +65,14 @@ function Trip({ tripId, onRetry }: { tripId: string; onRetry: () => void }) {
         {trip.data.vibe && <p className="text-sm text-muted-foreground">“{trip.data.vibe}”</p>}
       </header>
 
-      <Tabs defaultValue="crew">
+      <Tabs
+        value={tab ?? (trip.data.status === 'results' || trip.data.status === 'searching' ? 'results' : 'crew')}
+        onValueChange={(v) => setTab(String(v))}
+      >
         <TabsList className="w-full sm:w-fit">
           <TabsTrigger value="crew">Crew</TabsTrigger>
           <TabsTrigger value="destinations">Destinations</TabsTrigger>
-          <TabsTrigger value="results" disabled title="Coming soon">
-            Results
-          </TabsTrigger>
+          <TabsTrigger value="results">Results</TabsTrigger>
           <TabsTrigger value="book" disabled title="Coming soon">
             Book
           </TabsTrigger>
@@ -76,7 +81,10 @@ function Trip({ tripId, onRetry }: { tripId: string; onRetry: () => void }) {
           <CrewTab trip={trip} me={userId} />
         </TabsContent>
         <TabsContent value="destinations" className="pt-4">
-          <DestinationsTab trip={trip} me={userId} />
+          <DestinationsTab trip={trip} me={userId} onSearchStarted={() => setTab('results')} />
+        </TabsContent>
+        <TabsContent value="results" className="pt-4">
+          <ResultsTab trip={trip} me={userId} onGoToDestinations={() => setTab('destinations')} />
         </TabsContent>
       </Tabs>
     </>
