@@ -126,7 +126,7 @@ test.describe('cron and job rooms', () => {
 })
 
 /** Every action in src/actions/index.ts (a unit test keeps the registry to exactly these). */
-const ACTIONS = ['createTrip', 'joinTrip', 'addGhost', 'updateGhost', 'removeGhost']
+const ACTIONS = ['createTrip', 'joinTrip', 'previewInvite', 'addGhost', 'updateGhost', 'removeGhost', '__testLockTrip']
 
 test.describe('actions require a verified token', () => {
   for (const name of ACTIONS) {
@@ -170,7 +170,7 @@ test.describe('trip actions across two accounts', () => {
     expect(unknown.status()).toBe(404)
 
     const created = await act(aliceToken, 'createTrip', {
-      name: '__api-test trip',
+      name: '__test-api trip',
       outboundDate: futureDate(20),
       returnDate: futureDate(23),
     })

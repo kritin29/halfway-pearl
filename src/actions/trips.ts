@@ -4,12 +4,14 @@
  */
 import type { ActionTools } from 'deepspace/worker'
 import type { Env } from '../../worker'
-import { usageDay } from '../lib/caps'
+import { mayCreateTrip, usageDay, usageKeys } from '../lib/caps'
 import { INPUT_LIMITS, LIMITS } from '../lib/limits'
 import type { TravelerData, TripData } from '../lib/types'
-import { inviteCode as validInviteCode, text, tripDates } from '../lib/validate'
-import { defineAction, fail, isDuplicate, must, ok, parseIdList } from '../server/trip-access'
+import { inviteCode as validInviteCode, recordId, text, tripDates } from '../lib/validate'
+import { isTestTrip } from '../server/test-seam'
+import { defineAction, fail, isDuplicate, must, ok, parseIdList, requireOrganizer } from '../server/trip-access'
 import { queryTravelers, syncTripMembers } from '../server/trip-rows'
+import { getUsageCount, incrementUsage } from '../server/usage'
 
 const ALPHANUMERIC = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
 
@@ -61,13 +63,29 @@ function newTravelerRow(tripId: string, memberIds: string[], userId: string, dis
   }
 }
 
-export const createTrip = defineAction<Env>('createTrip', async ({ userId, params, tools }) => {
+const TRIP_FULL = `This trip already has ${LIMITS.maxTravelers} travelers.`
+const TRIP_LOCKED = 'This trip is locked: the destination is chosen and nobody new can join.'
+
+export const createTrip = defineAction<Env>('createTrip', async ({ userId, params, tools, env }) => {
   const name = text(params.name, 'Trip name', { max: INPUT_LIMITS.tripNameMax })
   if (!name.ok) return fail('invalid_params', name.error)
   const vibe = text(params.vibe, 'Vibe', { max: INPUT_LIMITS.vibeMax, optional: true })
   if (!vibe.ok) return fail('invalid_params', vibe.error)
   const dates = tripDates(params.outboundDate, params.returnDate, usageDay(new Date()))
   if (!dates.ok) return fail('invalid_params', dates.error)
+
+  // Abuse cap: N trips per user per UTC day (usage ledger, fails closed).
+  // Test trips in a dev/test env are exempt (src/server/test-seam.ts), so
+  // repeated local test runs don't lock the pool accounts out for the day.
+  const day = usageDay(new Date())
+  const capKey = usageKeys.tripsCreatedUser(userId)
+  const exempt = isTestTrip(env, name.value)
+  if (!exempt && !mayCreateTrip(await getUsageCount(tools, day, capKey))) {
+    return fail(
+      'cap_reached',
+      `You can create up to ${LIMITS.maxTripsCreatedPerUserPerDay} trips per day. Try again tomorrow.`,
+    )
+  }
 
   const displayName = await callerDisplayName(tools, userId)
   const memberIds = [userId]
@@ -106,6 +124,7 @@ export const createTrip = defineAction<Env>('createTrip', async ({ userId, param
     await tools.remove('trips', tripId)
     must(traveler, 'create organizer traveler')
   }
+  if (!exempt) await incrementUsage(tools, day, capKey)
   return ok({ tripId, inviteCode })
 })
 
@@ -125,9 +144,9 @@ export const joinTrip = defineAction<Env>('joinTrip', async ({ userId, params, t
   const alreadyTraveler = travelers.some((t) => t.data.userId === userId)
 
   if (!alreadyTraveler) {
-    if (travelers.length >= LIMITS.maxTravelers) {
-      return fail('trip_full', `This trip already has ${LIMITS.maxTravelers} travelers.`)
-    }
+    // Existing travelers of a locked trip still get `alreadyMember`; only newcomers are refused.
+    if (found.data.status === 'locked') return fail('trip_locked', TRIP_LOCKED)
+    if (travelers.length >= LIMITS.maxTravelers) return fail('trip_full', TRIP_FULL)
     const displayName = await callerDisplayName(tools, userId)
     const memberIds = [...new Set([...parseIdList(found.data.memberIds), userId])]
     const res = await tools.create('travelers', { ...newTravelerRow(tripId, memberIds, userId, displayName) })
@@ -141,7 +160,7 @@ export const joinTrip = defineAction<Env>('joinTrip', async ({ userId, params, t
         const rank = seatOrder(after).findIndex((t) => t.recordId === res.data.recordId)
         if (rank >= LIMITS.maxTravelers) {
           must(await tools.remove('travelers', res.data.recordId), 'undo traveler')
-          return fail('trip_full', `This trip already has ${LIMITS.maxTravelers} travelers.`)
+          return fail('trip_full', TRIP_FULL)
         }
       }
     }
@@ -150,4 +169,51 @@ export const joinTrip = defineAction<Env>('joinTrip', async ({ userId, params, t
   // Idempotent: also repairs memberIds if an earlier join stopped half-way.
   await syncTripMembers(tools, tripId, organizerId)
   return ok({ tripId, alreadyMember: alreadyTraveler })
+})
+
+/**
+ * What the invite page shows before joining (SPEC §10 /join/:code). A
+ * non-member can't read the trip row, so this returns only what the invite
+ * code's holder needs to decide: name, dates, how full, whether it's locked.
+ * The trip id is returned only to someone who is already on the trip.
+ */
+export const previewInvite = defineAction<Env>('previewInvite', async ({ userId, params, tools }) => {
+  const code = validInviteCode(params.inviteCode)
+  if (!code.ok) return fail('invalid_params', code.error)
+  const found = must(
+    await tools.query('trips', { where: { inviteCode: code.value }, limit: 1 }),
+    'find trip by invite code',
+  ).records[0]
+  if (!found) return fail('not_found', 'No trip matches that invite code.')
+
+  const travelers = await queryTravelers(tools, found.recordId)
+  const alreadyMember = travelers.some((t) => t.data.userId === userId)
+  return ok({
+    name: String(found.data.name ?? ''),
+    outboundDate: String(found.data.outboundDate ?? ''),
+    returnDate: String(found.data.returnDate ?? ''),
+    travelerCount: travelers.length,
+    maxTravelers: LIMITS.maxTravelers,
+    locked: found.data.status === 'locked',
+    full: travelers.length >= LIMITS.maxTravelers,
+    alreadyMember,
+    tripId: alreadyMember ? found.recordId : null,
+  })
+})
+
+/**
+ * TEST ONLY: lock a `__test-` trip so e2e can cover the trip_locked path
+ * before the real `lockTrip` (which also sends emails) exists. Refused unless
+ * ALLOW_DEBUG_ROUTES === 'true' and the trip name starts with `__test-`
+ * (src/server/test-seam.ts); organizer only.
+ */
+export const testLockTrip = defineAction<Env>('__testLockTrip', async ({ userId, params, tools, env }) => {
+  if (env.ALLOW_DEBUG_ROUTES !== 'true') return fail('not_found', 'Not available.')
+  const tripId = recordId(params.tripId, 'Trip')
+  if (!tripId.ok) return fail('invalid_params', tripId.error)
+  const access = await requireOrganizer(tools, tripId.value, userId)
+  if (!access.ok) return access.result
+  if (!isTestTrip(env, access.trip.data.name)) return fail('not_found', 'Not available.')
+  must(await tools.update('trips', tripId.value, { status: 'locked' }), 'lock test trip')
+  return ok({ tripId: tripId.value })
 })

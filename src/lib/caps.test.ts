@@ -3,6 +3,7 @@ import {
   decideRunStart,
   emailsAllowed,
   mayCallAi,
+  mayCreateTrip,
   mayMakeCall,
   planCalls,
   usageDay,
@@ -116,5 +117,13 @@ describe('ledger helpers', () => {
     expect(usageKeys.serpapiTrip('t1')).toBe('serpapi:trip:t1')
     expect(usageKeys.userSearchedTrip('u1', 't1')).toBe('search:user:u1:trip:t1')
     expect(usageRecordId('2026-11-20', usageKeys.serpapiGlobal())).toBe('2026-11-20|serpapi:global')
+  })
+})
+
+describe('mayCreateTrip', () => {
+  it('allows up to maxTripsCreatedPerUserPerDay', () => {
+    expect(mayCreateTrip(9)).toBe(true)
+    expect(mayCreateTrip(10)).toBe(false)
+    expect(mayCreateTrip(0, { ...LIMITS, maxTripsCreatedPerUserPerDay: 0 })).toBe(false)
   })
 })

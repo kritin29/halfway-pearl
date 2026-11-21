@@ -18,6 +18,8 @@ export type ErrorCode =
   | 'not_found'
   | 'forbidden'
   | 'trip_full'
+  | 'trip_locked'
+  | 'cap_reached'
   | 'conflict'
   | 'server_error'
 

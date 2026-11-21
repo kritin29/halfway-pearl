@@ -39,6 +39,8 @@ export const LIMITS = {
   maxTravelers: 8,
   /** Max trips one cron run enqueues for watching. */
   maxWatchTripsPerCronRun: 10,
+  /** Max trips one user may create per day (UTC). Abuse cap; creating a trip costs nothing. */
+  maxTripsCreatedPerUserPerDay: 10,
 } as const
 
 /** Input validation limits for action params (SPEC §5, §6). */

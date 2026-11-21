@@ -5,7 +5,7 @@ import { createFakeStore, type FakeStore } from '../server/testing/fake-tools'
 import { TRIP_SCOPED_COLLECTIONS } from '../server/trip-rows'
 import { addGhost, removeGhost, updateGhost } from './ghosts'
 import { actions } from './index'
-import { createTrip, joinTrip, newInviteCode, seatOrder } from './trips'
+import { createTrip, joinTrip, newInviteCode, previewInvite, seatOrder, testLockTrip } from './trips'
 
 const ALICE = 'user_alice'
 const BOB = 'user_bob'
@@ -13,12 +13,12 @@ const CAROL = 'user_carol'
 
 let store: FakeStore
 
-function call(action: ActionHandler<Env>, userId: string, params: unknown) {
+function call(action: ActionHandler<Env>, userId: string, params: unknown, env: Partial<Env> = {}) {
   return action({
     userId,
     params: params as Record<string, unknown>,
     tools: store.toolsFor(userId),
-    env: {} as Env,
+    env: env as Env,
     callerJwt: 'jwt',
   }) as Promise<ActionResult<Record<string, unknown>>>
 }
@@ -54,7 +54,7 @@ afterEach(() => {
 describe('registry', () => {
   it('exposes exactly the phase 3a actions', () => {
     expect(Object.keys(actions).sort()).toEqual(
-      ['addGhost', 'createTrip', 'joinTrip', 'removeGhost', 'updateGhost'].sort(),
+      ['__testLockTrip', 'addGhost', 'createTrip', 'joinTrip', 'previewInvite', 'removeGhost', 'updateGhost'].sort(),
     )
   })
 })
@@ -118,6 +118,36 @@ describe('createTrip', () => {
     expect(tripRow(res.tripId).data).toMatchObject({ organizerId: ALICE, memberIds: [ALICE] })
   })
 
+  it('caps trip creation at 10 per user per UTC day', async () => {
+    for (let i = 0; i < 10; i++) data(await call(createTrip, ALICE, { ...TRIP, name: `Trip ${i}` }))
+    expect(await call(createTrip, ALICE, TRIP)).toMatchObject({ success: false, code: 'cap_reached' })
+    expect(store.rows('trips')).toHaveLength(10)
+    expect(store.rows('usage')).toMatchObject([
+      { recordId: `2026-11-20|trips:created:user:${ALICE}`, data: { count: 10 } },
+    ])
+    // Someone else is unaffected, and the next UTC day starts fresh.
+    expect((await call(createTrip, BOB, TRIP)).success).toBe(true)
+    vi.setSystemTime(new Date('2026-11-21T00:00:01Z'))
+    expect((await call(createTrip, ALICE, TRIP)).success).toBe(true)
+  })
+
+  it('failed creates do not count against the cap', async () => {
+    await call(createTrip, ALICE, { ...TRIP, name: '' })
+    expect(store.rows('usage')).toEqual([])
+  })
+
+  it('test trips are exempt only when ALLOW_DEBUG_ROUTES is "true"', async () => {
+    const testTrip = { ...TRIP, name: '__test-trip' }
+    for (let i = 0; i < 10; i++) data(await call(createTrip, ALICE, testTrip))
+    // Production env: the __test- name alone changes nothing.
+    expect(await call(createTrip, ALICE, testTrip)).toMatchObject({ code: 'cap_reached' })
+    // Dev/test env: exempt, and not counted.
+    expect((await call(createTrip, ALICE, testTrip, { ALLOW_DEBUG_ROUTES: 'true' })).success).toBe(true)
+    expect(await call(createTrip, ALICE, TRIP, { ALLOW_DEBUG_ROUTES: 'true' })).toMatchObject({
+      code: 'cap_reached',
+    })
+  })
+
   it('invite codes are random', () => {
     const codes = new Set(Array.from({ length: 200 }, () => newInviteCode()))
     expect(codes.size).toBe(200)
@@ -157,6 +187,15 @@ describe('joinTrip', () => {
     store.seed('travelers', 'bob-row', { tripId, userId: BOB, memberIds: [ALICE], displayName: 'Bob' }, BOB)
     expect(data(await call(joinTrip, BOB, { inviteCode }))).toEqual({ tripId, alreadyMember: true })
     expect(tripRow(tripId).data.memberIds).toEqual([ALICE, BOB])
+  })
+
+  it('refuses newcomers to a locked trip; existing travelers are still members', async () => {
+    const { tripId, inviteCode } = await aliceTrip()
+    await call(joinTrip, BOB, { inviteCode })
+    await store.toolsFor(ALICE).update('trips', tripId, { status: 'locked' })
+    expect(await call(joinTrip, CAROL, { inviteCode })).toMatchObject({ success: false, code: 'trip_locked' })
+    expect(tripRow(tripId).data.memberIds).toEqual([ALICE, BOB])
+    expect(data(await call(joinTrip, BOB, { inviteCode }))).toEqual({ tripId, alreadyMember: true })
   })
 
   it('refuses bad and unknown codes', async () => {
@@ -320,5 +359,65 @@ describe('ghosts', () => {
     expect(travelersOf(tripId).map((t) => t.data.userId)).toEqual([ALICE, BOB])
     expect(store.rows('fares').map((f) => f.recordId)).toEqual(['f-bob'])
     expect(await call(removeGhost, ALICE, { tripId, ghostId })).toMatchObject({ code: 'not_found' })
+  })
+})
+
+describe('previewInvite', () => {
+  it('shows name, dates and capacity; the trip id only to members', async () => {
+    const { tripId, inviteCode } = await aliceTrip()
+    expect(data(await call(previewInvite, BOB, { inviteCode }))).toEqual({
+      name: 'Spring break',
+      outboundDate: '2026-12-11',
+      returnDate: '2026-12-13',
+      travelerCount: 1,
+      maxTravelers: 8,
+      locked: false,
+      full: false,
+      alreadyMember: false,
+      tripId: null,
+    })
+    expect(data(await call(previewInvite, ALICE, { inviteCode }))).toMatchObject({ alreadyMember: true, tripId })
+    // Previewing joins nobody.
+    expect(tripRow(tripId).data.memberIds).toEqual([ALICE])
+  })
+
+  it('reports locked and full trips', async () => {
+    const { tripId, inviteCode } = await aliceTrip()
+    for (let i = 0; i < 7; i++) {
+      await call(addGhost, ALICE, { tripId, displayName: `G${i}`, homeAirports: ['ORD'] })
+    }
+    await store.toolsFor(ALICE).update('trips', tripId, { status: 'locked' })
+    expect(data(await call(previewInvite, BOB, { inviteCode }))).toMatchObject({ locked: true, full: true })
+  })
+
+  it('refuses bad and unknown codes', async () => {
+    expect(await call(previewInvite, BOB, { inviteCode: 'x' })).toMatchObject({ code: 'invalid_params' })
+    expect(await call(previewInvite, BOB, { inviteCode: 'Unknown12345' })).toMatchObject({ code: 'not_found' })
+  })
+})
+
+describe('__testLockTrip (test seam)', () => {
+  const DEBUG = { ALLOW_DEBUG_ROUTES: 'true' }
+
+  it('is refused without ALLOW_DEBUG_ROUTES === "true" (production)', async () => {
+    const { tripId } = data<{ tripId: string }>(await call(createTrip, ALICE, { ...TRIP, name: '__test-lock' }))
+    for (const env of [{}, { ALLOW_DEBUG_ROUTES: 'false' }, { ALLOW_DEBUG_ROUTES: 'TRUE' }]) {
+      expect(await call(testLockTrip, ALICE, { tripId }, env)).toMatchObject({ code: 'not_found' })
+    }
+    expect(tripRow(tripId).data.status).toBe('gathering')
+  })
+
+  it('only locks __test- trips, and only for the organizer', async () => {
+    const real = await aliceTrip()
+    expect(await call(testLockTrip, ALICE, { tripId: real.tripId }, DEBUG)).toMatchObject({ code: 'not_found' })
+    const test = data<{ tripId: string; inviteCode: string }>(
+      await call(createTrip, ALICE, { ...TRIP, name: '__test-lock' }, DEBUG),
+    )
+    await call(joinTrip, BOB, { inviteCode: test.inviteCode })
+    expect(await call(testLockTrip, BOB, { tripId: test.tripId }, DEBUG)).toMatchObject({ code: 'forbidden' })
+    expect(await call(testLockTrip, CAROL, { tripId: test.tripId }, DEBUG)).toMatchObject({ code: 'not_found' })
+    data(await call(testLockTrip, ALICE, { tripId: test.tripId }, DEBUG))
+    expect(tripRow(test.tripId).data.status).toBe('locked')
+    expect(tripRow(real.tripId).data.status).toBe('gathering')
   })
 })

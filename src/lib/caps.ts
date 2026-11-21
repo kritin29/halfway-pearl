@@ -98,6 +98,11 @@ export function mayMakeCall(
   )
 }
 
+/** May this user create another trip today? */
+export function mayCreateTrip(userTripsCreatedToday: number, limits: Limits = LIMITS): boolean {
+  return userTripsCreatedToday < limits.maxTripsCreatedPerUserPerDay
+}
+
 /** May another AI suggestion call be made for this user today? */
 export function mayCallAi(userAiCallsToday: number, limits: Limits = LIMITS): boolean {
   return userAiCallsToday < limits.maxAiCallsPerUserPerDay
@@ -136,6 +141,7 @@ export const usageKeys = {
   aiUser: (userId: string) => `ai:user:${userId}`,
   emailTrip: (tripId: string) => `email:trip:${tripId}`,
   emailGlobal: () => 'email:global',
+  tripsCreatedUser: (userId: string) => `trips:created:user:${userId}`,
 }
 
 /** The `usage` row id for a (day, key) pair — upserted with `tools.create(..., recordId)`. */
