@@ -177,28 +177,36 @@ For each candidate, using the chosen fare per traveler:
 - Badges: "Fits everyone's budget" (fitsAll=1), price level from `price_insights.price_level`, "Everyone lands within Xh Ym" when spread ≤ 180.
 
 ### Fare selection per traveler × candidate (`src/lib/flights.ts` — pure, unit-tested against a saved fixture)
-The fixture comes from exactly **one** real call, made in Phase 2 with this body:
+The real fixture was to come from exactly **one** real call in Phase 2 with this body:
 `{"departure_id":"ORD,MDW","arrival_id":"BNA","outbound_date":"2026-12-11","return_date":"2026-12-13","type":"1","adults":1,"currency":"USD","hl":"en"}`
+That call failed upstream (`SerpAPI error 429: "Your account has run out of searches."`, billing released). Until the quota is back, `flights.ts` is written against SerpApi's published format (https://serpapi.com/google-flights-api, "JSON structure overview") and tested with the **hand-made** `src/lib/__fixtures__/serpapi-flights-sample.json` (top-level `_note` says so). **Re-run the same single call and cross-check field names before Phase 5 ships.**
+0. **Home pair:** if the candidate is one of the traveler's home airports, the fare is `price 0`, `status 'ok'`, `stops 0`, `originIata = candidate`, no times, and **no API call** is made for that pair (`homeFare()`). Ranking counts it in totals but not in the arrival spread.
 1. Call `serpapi/flights` with `departure_id` = traveler's home airports comma-joined (e.g. `ORD,MDW`), `arrival_id` = candidate IATA, `outbound_date`, `return_date`, `type: '1'` (round trip; SerpApi uses 1 = round trip, 2 = one way), `adults: 1`, `currency: 'USD'`, `hl: 'en'`. Cost: **$0.0325 per call** (from `integrations info`, Nov 20).
 2. Merge `best_flights` + `other_flights`. Apply constraints: stops ≤ maxStops (layovers count), drop red-eyes if `noRedeye` (outbound departs 21:00–04:59 local or arrives next day), drop departures before `earliestDepartHour`.
 3. Pick the cheapest remaining → fare row. If none remain but results existed → `filtered_out`; if no results → `no_results`.
 4. Copy `price_insights.price_level` and `typical_price_range` when present.
-5. `bookingUrl`: use `search_metadata.google_flights_url` if present in the raw response; otherwise build a Google Flights search URL.
+5. `bookingUrl`: use `search_metadata.google_flights_url` only when it is a google.com `/travel/flights` URL that carries a search (`tfs`/`q`); the docs' example value is a generic `…/travel/flights?hl=en`. Otherwise build `https://www.google.com/travel/flights?q=Flights to <DEST> from <ORIGINS> on <OUT> through <RET>&curr=USD&hl=en`.
+6. Parse defensively: a malformed itinerary (no positive numeric `price`, no legs, unparseable times, non-object) is skipped, never a crash. Accept the raw SerpApi JSON or the same wrapped in `{ data }`. Only outbound legs are in the response (returns need a `departure_token` request), so times/red-eye/arrival spread are outbound-only; `price` is the round-trip price.
 
-**Verify field names against the saved fixture** — the proxy returns the raw SerpApi JSON; don't assume.
+**Verify field names against a real response** when the quota is back — the hand-made fixture follows the docs, not observed output.
+
+### Integration failures (`classifyIntegrationFailure` in `src/lib/flights.ts`)
+- **`provider_unavailable`**: SerpApi out of quota / rate-limited (HTTP 429 or "run out of searches"). The platform releases billing for these. The job **does not retry** (it returns instead of throwing, so JobRoom's `maxAttempts` doesn't re-run it), makes **no further calls** in that run, does **not** increment `usage` for the failed call, and writes the human message "Live flight prices are temporarily unavailable from our data provider. This did not count against your daily search limit. Please try again later." to `trips.searchError`. Status moves back from `searching` (to `results` if earlier results exist, else `gathering`).
+- **`error`**: everything else. That pair's fare row gets `status 'error'`; the run continues; the call counts against `usage` (we can't know it wasn't billed). The user sees a generic message, never provider text.
+- Unit-tested with the real 429 envelope saved (verbatim, nothing secret in it) at `src/lib/__fixtures__/serpapi-error-429.json`.
 
 ## 8. Background job: `fare-search` (`src/jobs.ts`)
 
 Payload `{ tripId, mode: 'full' | 'watch' }`.
 1. Load trip, travelers, candidates (`mode:'watch'` → only top 3 by votes, or the locked one).
-2. Build pairs (traveler × candidate). Dedupe identical (origin set, destination, dates) — two friends from Chicago share one call.
+2. Build pairs (traveler × candidate). Home pairs (candidate is a home airport) get `homeFare()` with no call. Dedupe identical (origin set, destination, dates) — two friends from Chicago share one call.
 3. **Spend caps before any call** (at $0.0325/call): ≤ 30 calls per run (≤ $0.98), ≤ 2 full searches per trip per day, ≤ 3 trips started searching per user per day, global ≤ 80 serpapi calls per day (≤ $2.60/day, ≤ ~$13 over the review window). Put these numbers in one constants file so they're easy to tune. Increment `usage` per call.
 4. Cache: reuse a fare fetched < 6h ago for the same key (full mode only).
 5. Run calls with small concurrency (e.g. 4 at a time), write each fare row as it arrives (live fill-in), `ctx.progress(done/total, 'Checked ORD→BNA')` **and** a throttled `tools.update('trips', tripId, { searchProgress, searchMessage })` so members see progress, honor `ctx.signal`. `usage` increments go through one serial promise chain (get-then-update isn't atomic; caps are soft by ±1).
 6. Compute aggregates with `ranking.ts` (needs budgets — server-side read) and update candidates; write a `fareSnapshots` row per candidate.
 7. `mode:'watch'`: compare with the previous snapshot → group drop email; per-traveler private "now under your budget" email (only when crossing the threshold, not every day). Emails are deduped by markers so a retry doesn't resend, and stay within email caps.
 8. Set trip status=results (unless locked), lastSearchAt, searchProgress=1.
-9. Failure: a retry re-runs the whole handler (keep it idempotent; the < 6h cache makes it cheap). On the final failed attempt (`job.attempts >= job.maxAttempts`), set `searchError` and move status back from `searching`.
+9. Failure: a retry re-runs the whole handler (keep it idempotent; the < 6h cache makes it cheap). On the final failed attempt (`job.attempts >= job.maxAttempts`), set `searchError` and move status back from `searching`. A `provider_unavailable` failure (§7 "Integration failures") is not a thrown failure: no retry, no usage increment for that call.
 
 **How a job reaches integrations/records (resolved, NOTES §2):** `const tools = createAppTools(env, env.OWNER_USER_ID)`. Records go to RecordRoom `app:${env.DEEPSPACE_APP_ID}` with `X-App-Action: true` (RBAC off); `tools.integration(...)` signs developer-billed calls with `APP_OWNER_JWT` and returns the `{success, data | error, code}` envelope. Jobs run as the app owner and bill the owner. User-billed integrations can't work from a job (no caller JWT).
 
@@ -253,7 +261,7 @@ Hotels total (`serpapi/hotels`), flexible dates (±1 day), MapLibre map of origi
 
 ## Changelog
 
-### 2026-11-20 — Phase 0 decisions (from NOTES.md, approved by the developer)
+### 2026-11-20 — Phase 1 decisions (from NOTES.md, approved by the developer)
 | # | Change | Where in this spec | From |
 |---|---|---|---|
 | 1 | `admin` gets the `member` rules on every trip-scoped collection (owner is always admin; missing roles fall back to `'*'` → all-false). `trips` no longer has `admin: all true` | §5 Roles, each collection | NOTES C2 |
@@ -272,3 +280,12 @@ Hotels total (`serpapi/hotels`), flexible dates (±1 day), MapLibre map of origi
 | 14 | Job failure/retry handling (idempotent, emails deduped, status rolled back on final failure); `enqueueJob` failure handling in `startSearch` | §6 startSearch, §8.7–8.9 | NOTES C13, §5 |
 | 15 | Cron: "open the app once after deploy" replaced by automatic arming + log check; `where` is equality-only, so status/date filtered in code | §9 | NOTES C9, C13 |
 | 16 | Column-type conventions (date/datetime/json/0-1) and `hasBudget`/stray-budget handling written down | §5 | NOTES C13 |
+
+### 2026-11-20 — Phase 2 decisions (approved by the developer)
+| # | Change | Where in this spec | From |
+|---|---|---|---|
+| 17 | The one real SerpApi call failed (provider 429, billing released). `flights.ts` is written against SerpApi's published format with a hand-made fixture; re-check with a real response before Phase 5 ships | §7 Fare selection | AGENT_LOG Phase 2 |
+| 18 | Home pair: candidate = a home airport → price 0, status ok, stops 0, no API call; excluded from arrival spread | §7 step 0, §8.2 | developer decision |
+| 19 | Integration failures classified: `provider_unavailable` (429 / out of searches: no retry, no further calls, not counted in `usage`, human message in `searchError`) vs `error` | §7 Integration failures, §8.9 | developer decision |
+| 20 | Booking URL: use SerpApi's URL only when it carries a search; otherwise build a `?q=` Google Flights URL. Defensive parsing; outbound-only times | §7 steps 5–6 | SerpApi docs |
+| 21 | Approved Phase 2 choices: incomplete candidates have blank totals and sort last; watch checks capped at 3/trip/day (separate from the 2 full searches); under-budget email only on an above→at-or-below crossing; midpoint excludes home airports. Caps live in `src/lib/limits.ts` | §7, §8, `src/lib/limits.ts` | AGENT_LOG Phase 2 |

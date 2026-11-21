@@ -1,0 +1,166 @@
+{
+  "_note": "HAND-MADE from SerpApi's published Google Flights format (https://serpapi.com/google-flights-api, JSON structure overview, read 2026-11-20). NOT a real response: the one approved real call failed with a provider 429. Replace or cross-check with a real ORD,MDW -> BNA response when the quota is back. Each itinerary exercises one rule; see src/lib/flights.test.ts.",
+  "search_metadata": {
+    "id": "handmade-0001",
+    "status": "Success",
+    "created_at": "2026-11-20 22:30:00 UTC",
+    "google_flights_url": "https://www.google.com/travel/flights?hl=en",
+    "total_time_taken": 1.1
+  },
+  "search_parameters": {
+    "engine": "google_flights",
+    "hl": "en",
+    "departure_id": "ORD,MDW",
+    "arrival_id": "BNA",
+    "outbound_date": "2026-12-11",
+    "return_date": "2026-12-13",
+    "currency": "USD"
+  },
+  "best_flights": [
+    {
+      "_case": "nonstop from MDW at 07:15",
+      "flights": [
+        {
+          "departure_airport": { "name": "Chicago Midway International Airport", "id": "MDW", "time": "2026-12-11 07:15" },
+          "arrival_airport": { "name": "Nashville International Airport", "id": "BNA", "time": "2026-12-11 08:45" },
+          "duration": 90, "airline": "Southwest", "travel_class": "Economy", "flight_number": "WN 1234"
+        }
+      ],
+      "total_duration": 90,
+      "price": 158,
+      "type": "Round trip",
+      "departure_token": "handmade-token-1"
+    },
+    {
+      "_case": "nonstop from ORD at 06:00 (early, not a red-eye; hour written without leading zero)",
+      "flights": [
+        {
+          "departure_airport": { "name": "O'Hare International Airport", "id": "ORD", "time": "2026-12-11 6:00" },
+          "arrival_airport": { "name": "Nashville International Airport", "id": "BNA", "time": "2026-12-11 07:30" },
+          "duration": 90, "airline": "American", "travel_class": "Economy", "flight_number": "AA 2001"
+        }
+      ],
+      "total_duration": 90,
+      "price": 149,
+      "type": "Round trip",
+      "departure_token": "handmade-token-2"
+    }
+  ],
+  "other_flights": [
+    {
+      "_case": "red-eye by departure hour (21:40)",
+      "flights": [
+        {
+          "departure_airport": { "name": "O'Hare International Airport", "id": "ORD", "time": "2026-12-11 21:40" },
+          "arrival_airport": { "name": "Nashville International Airport", "id": "BNA", "time": "2026-12-11 23:10" },
+          "duration": 90, "airline": "United", "travel_class": "Economy", "flight_number": "UA 455"
+        }
+      ],
+      "total_duration": 90,
+      "price": 119,
+      "type": "Round trip"
+    },
+    {
+      "_case": "1 stop via ATL",
+      "flights": [
+        {
+          "departure_airport": { "name": "O'Hare International Airport", "id": "ORD", "time": "2026-12-11 12:05" },
+          "arrival_airport": { "name": "Hartsfield-Jackson Atlanta International Airport", "id": "ATL", "time": "2026-12-11 15:00" },
+          "duration": 115, "airline": "Delta", "flight_number": "DL 900"
+        },
+        {
+          "departure_airport": { "name": "Hartsfield-Jackson Atlanta International Airport", "id": "ATL", "time": "2026-12-11 16:15" },
+          "arrival_airport": { "name": "Nashville International Airport", "id": "BNA", "time": "2026-12-11 16:40" },
+          "duration": 85, "airline": "Delta", "flight_number": "DL 1801"
+        }
+      ],
+      "layovers": [{ "duration": 75, "name": "Hartsfield-Jackson Atlanta International Airport", "id": "ATL" }],
+      "total_duration": 275,
+      "price": 139,
+      "type": "Round trip"
+    },
+    {
+      "_case": "2 stops, cheapest overall",
+      "flights": [
+        {
+          "departure_airport": { "name": "Chicago Midway International Airport", "id": "MDW", "time": "2026-12-11 10:00" },
+          "arrival_airport": { "name": "Denver International Airport", "id": "DEN", "time": "2026-12-11 11:40" },
+          "duration": 160, "airline": "Frontier", "flight_number": "F9 10"
+        },
+        {
+          "departure_airport": { "name": "Denver International Airport", "id": "DEN", "time": "2026-12-11 13:00" },
+          "arrival_airport": { "name": "Dallas/Fort Worth International Airport", "id": "DFW", "time": "2026-12-11 16:05" },
+          "duration": 125, "airline": "Frontier", "flight_number": "F9 20"
+        },
+        {
+          "departure_airport": { "name": "Dallas/Fort Worth International Airport", "id": "DFW", "time": "2026-12-11 18:00" },
+          "arrival_airport": { "name": "Nashville International Airport", "id": "BNA", "time": "2026-12-11 20:00" },
+          "duration": 120, "airline": "Frontier", "flight_number": "F9 30"
+        }
+      ],
+      "layovers": [
+        { "duration": 80, "name": "Denver International Airport", "id": "DEN" },
+        { "duration": 115, "name": "Dallas/Fort Worth International Airport", "id": "DFW" }
+      ],
+      "total_duration": 600,
+      "price": 99,
+      "type": "Round trip"
+    },
+    {
+      "_case": "1 stop, arrives next day (overnight)",
+      "flights": [
+        {
+          "departure_airport": { "name": "O'Hare International Airport", "id": "ORD", "time": "2026-12-11 19:30" },
+          "arrival_airport": { "name": "Charlotte Douglas International Airport", "id": "CLT", "time": "2026-12-11 22:35" },
+          "duration": 125, "airline": "American", "flight_number": "AA 300"
+        },
+        {
+          "departure_airport": { "name": "Charlotte Douglas International Airport", "id": "CLT", "time": "2026-12-11 23:20" },
+          "arrival_airport": { "name": "Nashville International Airport", "id": "BNA", "time": "2026-12-12 00:20" },
+          "duration": 120, "airline": "American", "flight_number": "AA 301", "overnight": true
+        }
+      ],
+      "layovers": [{ "duration": 45, "name": "Charlotte Douglas International Airport", "id": "CLT" }],
+      "total_duration": 290,
+      "price": 109,
+      "type": "Round trip"
+    },
+    {
+      "_case": "MALFORMED: no price",
+      "flights": [
+        {
+          "departure_airport": { "id": "ORD", "time": "2026-12-11 09:00" },
+          "arrival_airport": { "id": "BNA", "time": "2026-12-11 10:30" },
+          "airline": "United"
+        }
+      ],
+      "type": "Round trip"
+    },
+    {
+      "_case": "MALFORMED: empty flights",
+      "flights": [],
+      "price": 50,
+      "type": "Round trip"
+    },
+    {
+      "_case": "MALFORMED: unparseable departure time",
+      "flights": [
+        {
+          "departure_airport": { "id": "ORD", "time": "soon" },
+          "arrival_airport": { "id": "BNA", "time": "2026-12-11 10:30" },
+          "airline": "United"
+        }
+      ],
+      "price": 40,
+      "type": "Round trip"
+    },
+    "MALFORMED: not an object",
+    null
+  ],
+  "price_insights": {
+    "lowest_price": 99,
+    "price_level": "low",
+    "typical_price_range": [140, 260],
+    "price_history": [[1763596800, 180], [1763683200, 165]]
+  }
+}

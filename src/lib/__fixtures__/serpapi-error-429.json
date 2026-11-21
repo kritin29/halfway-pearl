@@ -1,0 +1,10 @@
+{
+  "_note": "REAL error envelope from \"npx deepspace integrations invoke serpapi/flights --yes --json\" on 2026-11-20 (body: ORD,MDW -> BNA, 2026-12-11 -> 2026-12-13). Kept verbatim: it has no ids, tokens, emails or other secrets, so nothing needed redacting. Billing was released (not charged).",
+  "ok": false,
+  "code": "upstream_provider_error",
+  "error": "serpapi/flights (502, 529ms): SerpAPI error 429: {\n  \"error\": \"Your account has run out of searches.\"\n}",
+  "success": false,
+  "integration": "serpapi",
+  "endpoint": "flights",
+  "billing": "released"
+}

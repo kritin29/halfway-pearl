@@ -1,4 +1,4 @@
-# NOTES — DeepSpace research vs SPEC.md (Phase 0)
+# NOTES — DeepSpace research vs SPEC.md (Phase 1)
 
 Written 2026-11-20 against `deepspace@0.44.2` (installed) and docs.deep.space as fetched today.
 Sources: the `.md` docs listed in CLAUDE.md, `node_modules/deepspace/dist/{schema,worker}.d.ts`,
