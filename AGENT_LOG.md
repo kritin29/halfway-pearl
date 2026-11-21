@@ -252,3 +252,34 @@ LIVE GET /api/debug/records -> HTTP 404 404 Not Found
 - Layout checked at 390px in headless Chromium only.
 **I verified myself (how):**
 - …
+
+## Phase 7 — Fare watch (plus the outage refund) — Sat Nov 21
+**Agent (Claude Code) did:**
+- Fix first: a fare search that ends `provider_unavailable` with zero successful real calls (and no billed failed call) gives back the trip's daily full search, on the day it was counted (`countedOn` now in the job payload). Partial outages still count. Pure rule `refundsDailyCount` (src/lib/caps.ts) + 4 job tests. SPEC #42, NOTES S8 resolved, W0.
+- `fare-search` mode `watch` (src/server/fare-search.ts): shortlist = locked destination, else top 3 by votes (ties → cheaper complete total), < 6h cache reused, aggregates + one `fareSnapshots` row per re-checked destination. Never touches `status` or the full search's fields; unanswered pairs keep their previous fare and that destination gets no snapshot (W1).
+- Alerts (src/lib/watch.ts decisions, src/server/watch-alerts.ts sender): group drop ≥ max($50, 5%) vs the previous snapshot → one email per real member with group totals and their own fare (no budget input at all); private email to one traveler the first time their fare crosses to ≤ their budget (never states the amount). Both deduped in `emailLog` (per run / once ever), within email caps, mocked for `__test-` trips. Lock emails moved onto the same `deliverOnce` helper (src/server/email-delivery.ts).
+- `checkFaresNow` (organizer): refused while searching / before results / ≤ 1 day before departure / while a check is queued; 3 per trip per day (shared with the cron) + global budget; `watchQueuedAt` set before enqueue, rolled back on enqueue failure.
+- Cron `fare-watch` at `0 8 * * *` America/Chicago (src/cron.ts → src/server/fare-watch-cron.ts): watch on, results or locked, outbound > 1 day away, soonest first, max 10 per run, once-per-trip-per-day marker, caps, pending check, rollback.
+- Book tab: real "Daily fare watch" switch, "Check fares now" with pending / disabled-with-reason / error-with-retry, "Last checked …", job error line, and a small sparkline of the group total (locked destination, or top of the shortlist). Book now opens at status results (W8). Checked at 390px for organizer and member.
+- New trips columns `watchQueuedAt`, `watchError`; new codes `watch_running`, `watch_ended`; `timeAgo` helper.
+- Tests: unit `fare-watch.test.ts` (13: shortlist-only calls, cache, locked trip, skips, drop email + no budget + own fare, retry/duplicate/no-new-drop, under threshold, email cap, mocked seam, first crossing only, already under budget, total and partial outage), `fare-watch-cron.test.ts` (7), `checkFaresNow` (8 in search.test.ts), watch.ts (shortlist, window, Chicago date, pending, cron filter), caps (refund rule), email templates, format. e2e `tests/watch.spec.ts` (two users: check now → snapshot → both sparklines gain a point live; 4th check refused; toggle seen live; lock switches the watched destination). `book.spec.ts` updated for the now-live switch and the Book tab opening at results. api: `checkFaresNow` 401.
+- Results: unit 23 files / 385 passed; `test run` (smoke+api) 35 passed, incl. the one real AI call and the one real `email/send` call (`sent: 1`, now through `deliverOnce`); `test run e2e --grep "^(?!.*one real).*$"` (both real-call tests excluded) 49 passed; tsc 0; eslint 0. Real calls this phase: 1 email/send, 1 anthropic, **0 SerpApi**.
+- Mutation checks: refunding partial outages failed 3 tests; keying the private email per send (not first-time-only) failed 2; both restored.
+**What broke / surprised me:**
+- My price-shifting test helper crashed on the fixture's deliberately malformed (null) entries, so every call "errored"; fixed in the helper, not the code.
+- Alice legitimately crossed under budget for 2 shortlisted destinations, not 1; the test now computes the expected crossings from her fares.
+- Bash heredocs with backticks and quotes failed to parse again; used files written with the Write tool.
+- A throwaway screenshot spec (deleted) miscounted the cap on its first try.
+**Decisions & tradeoffs (please confirm):**
+- W0 refund also applies to watch checks; an outage after a billed error isn't refunded.
+- W1 keep previous fares on unanswered pairs in watch mode (no snapshot for that destination).
+- W4 drop emails keyed per run, not per day; W5 private email once ever per destination, amount never stated.
+- W7 Chicago calendar for "≤ 1 day"; "stops automatically" is enforced, `watchEnabled` isn't flipped; >10 watched trips → later ones skipped that day.
+- W8 Book tab enabled at results.
+**Unsure about:**
+- The cron hasn't run on a deployed app (not deployed per your instruction); unit-tested, and the job path is exercised by `checkFaresNow` in e2e.
+- Drop/crossing emails are verified with the fake store and the mocked seam only; no real watch email was sent.
+- Missed crossing on a crash-then-retry (W5) is accepted, not fixed.
+- `flights.ts` still unverified against a real SerpApi response (R7).
+**I verified myself (how):**
+- …
