@@ -10,30 +10,13 @@
  * SAN and MIA, which the fixture prices so all three tabs order differently.
  */
 import { test, expect, loadAllTestAccounts, type MultiplayerUser } from 'deepspace/testing'
-import { act, asClient, captureSocketFrames, createTripApi, testTripName } from './helpers/trips'
+import { act, asClient, captureSocketFrames, createTripApi, setOwnAirports, testTripName } from './helpers/trips'
 
 const usable = loadAllTestAccounts().length
 test.skip(usable < 2, `Needs 2 usable test accounts, found ${usable}.`)
 test.describe.configure({ timeout: 120_000 })
 
 const ALICE_BUDGET = 4321
-
-/**
- * Set my own home airports the way a browser can (RBAC on, writableFields
- * only). The room lets me update only my own row, so try the rows I can see.
- */
-async function setOwnAirports(user: MultiplayerUser, baseURL: string, tripId: string, homeAirports: string[]) {
-  const rows = await asClient(user, baseURL, 'records_query', { collection: 'travelers', where: { tripId } })
-  for (const row of rows.body.result?.data?.records ?? []) {
-    const res = await asClient(user, baseURL, 'records_update', {
-      collection: 'travelers',
-      recordId: row.recordId,
-      data: { homeAirports },
-    })
-    if (res.status === 200 && res.body.ok && res.body.result?.success) return
-  }
-  throw new Error('could not set my own home airports')
-}
 
 /** The card IATAs in on-screen order, with their sort values. */
 async function cards(user: MultiplayerUser) {

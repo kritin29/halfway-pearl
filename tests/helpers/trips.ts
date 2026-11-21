@@ -80,3 +80,40 @@ export function captureSocketFrames(user: MultiplayerUser): string[] {
   })
   return frames
 }
+
+/**
+ * Set my own home airports the way a browser can (RBAC on, writableFields
+ * only). The room lets me update only my own row, so try the rows I can see.
+ */
+export async function setOwnAirports(user: MultiplayerUser, baseURL: string, tripId: string, homeAirports: string[]) {
+  const rows = await asClient(user, baseURL, 'records_query', { collection: 'travelers', where: { tripId } })
+  for (const row of rows.body.result?.data?.records ?? []) {
+    const res = await asClient(user, baseURL, 'records_update', {
+      collection: 'travelers',
+      recordId: row.recordId,
+      data: { homeAirports },
+    })
+    if (res.status === 200 && res.body.ok && res.body.result?.success) return
+  }
+  throw new Error('could not set my own home airports')
+}
+
+/** Poll the trip row (as a member, RBAC on) until `check` says it's done. */
+export async function waitForTrip(
+  user: MultiplayerUser,
+  baseURL: string,
+  tripId: string,
+  check: (trip: Record<string, unknown>) => boolean,
+  timeout = 60_000,
+): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const res = await asClient(user, baseURL, 'records_query', { collection: 'trips', where: { recordId: tripId } })
+        const trip = res.body.result?.data?.records?.[0]?.data
+        return trip ? check(trip) : false
+      },
+      { timeout },
+    )
+    .toBe(true)
+}

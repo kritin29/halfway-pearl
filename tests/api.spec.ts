@@ -1,7 +1,7 @@
 import { test, expect, loadAllTestAccounts } from 'deepspace/testing'
 import { readFileSync } from 'node:fs'
 import { bearerFor } from './helpers/auth'
-import { act, asClient, openApp, testTripName } from './helpers/trips'
+import { act, asClient, openApp, setOwnAirports, testTripName, waitForTrip } from './helpers/trips'
 
 test.describe('API tests', () => {
   test('auth proxy forwards to auth worker', async ({ request }) => {
@@ -140,6 +140,8 @@ const ACTIONS = [
   'suggestCandidates',
   'startSearch',
   'toggleVote',
+  'lockTrip',
+  'setWatch',
   '__testLockTrip',
 ]
 
@@ -305,5 +307,47 @@ test.describe('AI destination suggestions (one real call)', () => {
     for (const r of stored.filter((r) => r.data.source === 'ai')) {
       expect(String(r.data.why).length).toBeLessThanOrEqual(140)
     }
+  })
+})
+
+/**
+ * The ONE real email/send call per test run (CLAUDE.md). The trip is named
+ * `__test-real-email-…`: like every `__test-` trip it gets fixture fares (no
+ * SerpApi call), but the email seam lets this prefix send for real
+ * (src/server/email-source.ts). Alice is the only real member (the other
+ * traveler is a ghost, who never gets email), so lockTrip makes exactly one
+ * email/send call, to her test-account address. The retry proves no second
+ * call is made.
+ */
+test.describe('lock booking email (one real call)', () => {
+  test.skip(usableTestAccounts < 1, NEEDS_ACCOUNTS)
+  test.describe.configure({ timeout: 120_000 })
+
+  test('lockTrip sends one real booking email to the only real member; the retry sends none', async ({ users, baseURL }) => {
+    const [alice] = await users(1)
+    await openApp(alice) // her users row (and its email) exists from here on
+    const created = await act<{ tripId: string }>(alice, baseURL!, 'createTrip', {
+      name: `__test-real-email-${Date.now().toString(36)}`,
+      outboundDate: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10),
+      returnDate: new Date(Date.now() + 33 * 86_400_000).toISOString().slice(0, 10),
+    })
+    expect(created, 'createTrip').toMatchObject({ success: true })
+    const tripId = created.data!.tripId
+    await setOwnAirports(alice, baseURL!, tripId, ['ORD'])
+    expect(await act(alice, baseURL!, 'addGhost', { tripId, displayName: 'Ghost', homeAirports: ['DEN'] })).toMatchObject({
+      success: true,
+    })
+    expect(await act(alice, baseURL!, 'addCandidate', { tripId, iata: 'BNA' })).toMatchObject({ success: true })
+    expect(await act(alice, baseURL!, 'startSearch', { tripId })).toMatchObject({ success: true })
+    await waitForTrip(alice, baseURL!, tripId, (t) => t.status === 'results')
+
+    const lock = await act<{ emails: Record<string, unknown> }>(alice, baseURL!, 'lockTrip', { tripId, iata: 'BNA' })
+    // Printed for the phase summary (counts only; no address or body).
+    console.log(`REAL EMAIL RESULT: ${JSON.stringify(lock)}`)
+    expect(lock, 'lockTrip').toMatchObject({ success: true, data: { iata: 'BNA', alreadyLocked: false } })
+    expect(lock.data!.emails).toEqual({ sent: 1, alreadySent: 0, noEmail: 0, capped: 0, failed: 0, mocked: false })
+
+    const retry = await act<{ emails: Record<string, unknown> }>(alice, baseURL!, 'lockTrip', { tripId, iata: 'BNA' })
+    expect(retry.data!.emails).toMatchObject({ sent: 0, alreadySent: 1, failed: 0 })
   })
 })
