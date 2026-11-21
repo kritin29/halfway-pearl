@@ -32,6 +32,9 @@ export type ErrorCode =
   // Fare search and votes (src/actions/search.ts, src/actions/votes.ts)
   | 'needs_candidates'
   | 'enqueue_failed'
+  // Lock (src/actions/lock.ts)
+  | 'not_ready'
+  | 'incomplete'
 
 export type Failure = { success: false; error: string; code: ErrorCode }
 
