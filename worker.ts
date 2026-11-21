@@ -65,15 +65,26 @@ export class AppCronRoom extends CronRoom<Env> {
   }
 }
 
-/** Runs durable background work defined in src/jobs.ts. */
+/**
+ * Runs durable background work defined in src/jobs.ts.
+ *
+ * Admin-only for both read and write (SPEC §4, NOTES C3): the fare-search job
+ * spends owner credits, so members must not enqueue it around the caps in
+ * `startSearch`, and the app-wide queue would show every trip's payloads and
+ * progress. Clients never use `useJobs`; progress is copied onto the trip row.
+ * Server code enqueues through `enqueueJob`, whose internal path doesn't run
+ * `authorizeWrite`.
+ */
+async function isAppAdmin(env: Env, userId: string): Promise<boolean> {
+  if (userId.startsWith('anon-')) return false
+  return (await resolveAppRole(env, userId)) === 'admin'
+}
+
 export class AppJobRoom extends JobRoom<Env> {
   constructor(state: DurableObjectState, env: Env) {
     super(state, env, {
-      authorizeWrite: async (user) => {
-        if (user.userId.startsWith('anon-')) return false
-        const role = await resolveAppRole(env, user.userId)
-        return role === 'member' || role === 'admin'
-      },
+      authorizeWrite: (user) => isAppAdmin(env, user.userId),
+      authorizeRead: (user) => isAppAdmin(env, user.userId),
     })
   }
 

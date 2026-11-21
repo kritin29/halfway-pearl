@@ -19,10 +19,12 @@ function jwtConfig(env: Env): JwtVerifierConfig {
 function wsRoute(
   doNamespace: (env: Env) => DurableObjectNamespace,
   extraIdentity?: (auth: VerifyResult, env: Env) => { role?: string } | Promise<{ role?: string }>,
+  allowRoom?: (id: string, env: Env) => boolean,
 ) {
   return async (c: Context<AppContext>) => {
     const id = c.req.param('roomId') ?? c.req.param('docId') ?? c.req.param('scopeId')
     if (!id) return new Response('Not found', { status: 404 })
+    if (allowRoom && !allowRoom(id, c.env)) return new Response('Not found', { status: 404 })
     const url = new URL(c.req.url)
     const token = url.searchParams.get('token')
 
@@ -120,6 +122,11 @@ async function resolveDocsYjsRole(
   return null
 }
 
+/** The app's single cron/job room id. */
+export function isAppRoom(id: string, env: Pick<Env, 'DEEPSPACE_APP_ID'>): boolean {
+  return id === `app:${env.DEEPSPACE_APP_ID}`
+}
+
 export function registerRealtimeRoutes(app: Hono<AppContext>): void {
   app.get(
     '/ws/:roomId',
@@ -155,18 +162,25 @@ export function registerRealtimeRoutes(app: Hono<AppContext>): void {
     wsRoute((env) => env.PRESENCE_ROOMS),
   )
 
+  // Cron and jobs: only the app's one room (SPEC §9, NOTES C7). Any other id
+  // would create an extra CronRoom with its own fare-watch schedule (or an
+  // extra job queue), so it 404s before a Durable Object is touched.
   app.get(
     '/ws/cron/:roomId',
     wsRoute(
       (env) => env.CRON_ROOMS,
-      // Authenticated users get their current app role. Anonymous connections
-      // have no role and CronRoom enforces them as read-only viewers.
-      async (auth, env) => ({ role: await resolveAppRole(env, auth.userId) }),
+      // Writes (trigger/pause/resume) run owner-billed tasks, so only admins
+      // get a writer role; everyone else is a read-only viewer. Anonymous
+      // connections have no role and CronRoom treats them as viewers too.
+      async (auth, env) => ({
+        role: (await resolveAppRole(env, auth.userId)) === 'admin' ? 'admin' : 'viewer',
+      }),
+      isAppRoom,
     ),
   )
 
   app.get(
     '/ws/jobs/:roomId',
-    wsRoute((env) => env.JOB_ROOMS),
+    wsRoute((env) => env.JOB_ROOMS, undefined, isAppRoom),
   )
 }
