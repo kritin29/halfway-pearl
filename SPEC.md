@@ -54,7 +54,7 @@ Halfway is the coordination layer; flight search is one component.
 | Parallel fare search | **JobRoom** job (`src/jobs.ts`) | Outlives the request, retries. Room is **admin-only** for read and write (clients never use `useJobs`); the job copies progress onto the trip row |
 | Daily fare watch | **CronRoom** task (`src/cron.ts`) | Durable schedule with history/logs. Cron writes (trigger/pause/resume) are admin-only |
 | Flights | `serpapi/flights` integration | Google Flights data + `price_insights`, no API key |
-| Destination ideas | `anthropic/chat-completion` integration | Turns a vibe into candidates; output is validated. Always pass a Haiku model (`claude-haiku-5-5`) and `max_tokens` ≈ 600 — the endpoint defaults to Opus/4096 |
+| Destination ideas | `anthropic/chat-completion` integration | Turns a vibe into candidates; output is validated. Always pass a Haiku model (`claude-haiku-5-5`) and `max_tokens` 2048 (reasoning included; Haiku 5.5 thinks by default and 600 left no room for the answer) — the endpoint defaults to Opus/4096 |
 | Alerts & booking links | `email/send` integration | The platform ignores `from`; mail comes from `DeepSpace Apps <notifications@updates.app.space>`. Brand via subject/body ("Halfway"); $0.013/email, capped |
 | Server tools for actions, jobs, cron | `createAppTools(env, actingUserId, callerJwt?)` in `src/server/app-tools.ts` | One RBAC-off tools factory (get/query/create-with-recordId/update/remove/deleteWhere/integration) instead of `buildCronContext`, which lacks get/orderBy/upsert and defaults to room `"default"` |
 
@@ -152,15 +152,17 @@ Every action: (1) load the trip with `tools.get`, (2) check the caller is in `me
 | `createTrip({name, outboundDate, returnDate, vibe})` | any signed-in | creates trip (memberIds=[caller]), inviteCode, caller's traveler row. Cap: 10 trips per user per UTC day (`usage`, `cap_reached`) |
 | `joinTrip({inviteCode})` | any signed-in | adds caller to trip.memberIds, creates traveler row, **propagates new memberIds to every trip-scoped row** (travelers, candidates, fares, votes, fareSnapshots). Idempotent. Max 8 travelers incl. ghosts. Refuses newcomers to a locked trip (`trip_locked`) |
 | `addGhost({tripId, displayName, homeAirports, ...})` / `updateGhost` / `removeGhost` | organizer | ghost traveler rows |
-| `addCandidate({tripId, iata})` | member | validates IATA against `src/data/airports.json`; max 6 |
-| `suggestCandidates({tripId})` | organizer | AI (`claude-haiku-5-5`, `max_tokens` ≈ 600, JSON-only system prompt) → JSON → validate each IATA → insert up to (6 − existing). Cap: 5 AI calls per user per day (`usage`) |
-| `addMidpointHubs({tripId})` | organizer | deterministic: centroid of travelers' home airports (lat/lon) → nearest 2 "major" airports not already candidates |
-| `removeCandidate({tripId, iata})` | organizer | also deletes its fares/votes |
+| `addCandidate({tripId, iata})` | member | validates IATA against `src/data/airports.json`; max 6 (`candidates_full`); no duplicates (`duplicate`); source `manual` |
+| `suggestCandidates({tripId})` | organizer | AI (`claude-haiku-5-5`, `max_tokens` 2048, JSON-only system prompt; prompt = each traveler's home airports (IATA + city, no names), dates, vibe, existing candidates) → defensive JSON parse (`src/lib/suggest.ts`) → keep IATAs in airports.json, not already listed → insert up to (6 − existing), source `ai`. City/country from airports.json, `why` ≤ 140 chars. Needs ≥ 1 traveler with airports (`needs_airports`). Cap: 5 AI calls per user per day (`usage`, `cap_reached`), checked before the call. Provider failures classified like flights: `provider_unavailable` (quota/429, not counted) vs `ai_error` (counted) |
+| `addMidpointHubs({tripId})` | organizer | deterministic: centroid of travelers' home airports (lat/lon) → nearest 2 "major" airports not already candidates or home airports, up to the free slots; source `midpoint`. Needs ≥ 2 travelers with airports (`needs_airports`) |
+| `removeCandidate({tripId, iata})` | organizer | also deletes its fares, votes and fareSnapshots |
 | `startSearch({tripId})` | organizer | refuses if status=searching; checks caps, increments counters, sets status=searching, `enqueueJob(env.JOB_ROOMS, \`app:${env.DEEPSPACE_APP_ID}\`, 'fare-search', {tripId, mode:'full'}, {maxAttempts: 2, enqueuedBy: userId})`, stores `searchJobId`, clears `searchError`. `enqueueJob` throws on failure → roll status back, return `code: 'enqueue_failed'` |
 | `toggleVote({tripId, iata})` | member | upsert/delete own vote |
 | `lockTrip({tripId, iata})` | organizer | status=locked, lockedIata; emails each real member their booking link (within email caps) |
 | `setWatch({tripId, enabled})` | organizer | |
 | `checkFaresNow({tripId})` | organizer | enqueues `fare-search` with `mode:'watch'` (same caps) |
+
+**Destination rules (all four candidate actions).** The list is frozen while `status` is `searching` (`search_running`) or `locked` (`trip_locked`). The 6-candidate maximum is checked before writing and again after (two writers at once: the newer rows back out, as in `joinTrip`). New candidate rows copy the trip's current `memberIds` and are re-synced if someone joined mid-write. In dev/test only (`ALLOW_DEBUG_ROUTES === 'true'`), `__test-` trips skip the AI cap and `suggestCandidates` also returns `debug: { prompt, raw }`.
 
 ## 7. Ranking & privacy rules (`src/lib/ranking.ts` — pure, unit-tested)
 
@@ -255,7 +257,7 @@ Arming: the scaffold's `armCronRoom` middleware and deploy's own wake-up request
 
 ## 13. Stretch (only after acceptance criteria pass)
 
-Hotels total (`serpapi/hotels`), flexible dates (±1 day), MapLibre map of origins/candidates, "nudge unbooked" reminders, leave trip.
+Hotels total (`serpapi/hotels`), flexible dates (±1 day), MapLibre map of origins/candidates, "nudge unbooked" reminders, leave trip, organizer can delete a trip (`trips` is `delete: false` for every role today, so this needs a `deleteTrip` action that cascades every trip-scoped row).
 
 ---
 
@@ -296,3 +298,11 @@ Hotels total (`serpapi/hotels`), flexible dates (±1 day), MapLibre map of origi
 | 22 | `joinTrip` refuses newcomers to a locked trip with `trip_locked` (existing travelers still get `alreadyMember`) | §6 joinTrip | developer ruling |
 | 23 | Trip creation capped at 10 per user per UTC day via `usage` (`maxTripsCreatedPerUserPerDay` in `src/lib/limits.ts`), `cap_reached` | §6 createTrip | developer ruling |
 | 24 | Kept as built: a non-member gets `not_found` for an existing trip; a malformed action body gets HTTP 400 | §6 | developer ruling |
+
+### 2026-11-21 — Phase 4 (destinations)
+| # | Change | Where in this spec | From |
+|---|---|---|---|
+| 25 | "Organizer can delete a trip" added to stretch | §13 | developer ruling |
+| 26 | AI `max_tokens` 600 → 2048: Haiku 5.5 reasons by default (the endpoint can't turn it off) and the real call at 600 spent the whole budget on reasoning. Real call at 2048: 974 output tokens (542 reasoning), $0.00053 | §4, §6 suggestCandidates, `src/lib/limits.ts` | developer decision after NOTES Q1 |
+| 27 | Destination actions spelled out: error codes, frozen while searching/locked, post-write max check, `removeCandidate` also deletes fareSnapshots, midpoint skips home airports and fills free slots only | §6 | Phase 4 build |
+| 28 | Dev/test-only seams: `__test-` trips skip the AI cap, `suggestCandidates` returns `debug` (both need `ALLOW_DEBUG_ROUTES === 'true'`) | §6 | Phase 4 build (NOTES Q3) |

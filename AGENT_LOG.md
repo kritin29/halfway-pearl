@@ -159,3 +159,32 @@ LIVE GET /api/debug/records -> HTTP 404 404 Not Found
 **Not done, on purpose:** I did not create `__test-` trips in production to hit the cap directly. That takes up to 10 trips plus an 11th refusal, and no trip can be deleted: there's no delete action, and `trips` has `delete: false` for every role, admin included. Production writes made: none to app data. Signing Alice in creates an auth session; the sign-in page load may have registered her `users` row if she had none.
 **I verified myself (how):**
 - …
+
+
+---
+
+## Phase 4 — Destinations — Sat Nov 21
+**Agent (Claude Code) did:**
+- SPEC §13: "organizer can delete a trip" added to stretch (not built).
+- Actions in `src/actions/candidates.ts`: `addCandidate` (member), `removeCandidate`, `addMidpointHubs`, `suggestCandidates` (organizer). Each loads the trip and checks membership/organizer first, validates with `validate.ts`, and uses `LIMITS`. Max 6, checked before and after writing (concurrent writers: the newer rows back out). Duplicates refused. List frozen while `searching`/`locked`. Remove also deletes that candidate's fares, votes and fareSnapshots.
+- Pure `src/lib/suggest.ts`: prompt builder, response-text extraction, defensive JSON parsing (fences, prose, wrapper objects, truncated arrays), selection (known IATA only, dedupe, free slots), `why` cleaned to ≤ 140 chars, provider failures classified with the same quota detector as flights (`detectProviderQuota`, split out of `classifyIntegrationFailure`).
+- `knownHomeAirports` (`src/lib/airports.ts`) re-validates client-written home airports before midpoint/AI use (NOTES G1).
+- UI: Destinations tab enabled, with a live candidate list (AI / Middle / Manual badges, "why", "Added by"), add-by-search (new `AirportCombobox`, which `AirportPicker` now reuses), organizer "Suggest with AI" / "Add geographic middle" with pending and inline error-with-retry states, remove with confirm, an empty state, and a disabled "Find fares · coming next". Checked at 390px; shortened a placeholder that was cut off.
+- Tests: unit 15 files / 253 (new: `suggest.test.ts` parser + prompt + classification; `candidates.test.ts` 24 action tests with the integration mocked at the boundary). e2e `tests/destinations.spec.ts` (3 two-user tests). One real-call test in `api.spec.ts`.
+- Results: `test run` (smoke+api) 29 passed; `test run e2e` with the real-call test excluded by `--grep` (so it doesn't make a second paid call) 41 passed; unit 253 passed; tsc 0, eslint 0.
+- Mutation checks: turning off the post-write max check and making `suggestCandidates` member-only each failed a unit test; restored.
+**What broke / surprised me:**
+- The first real AI call failed: Haiku 5.5 reasons by default, and `max_tokens: 600` was all used up by reasoning (NOTES Q1). The endpoint can't turn thinking off. You chose 2048; the second real call passed (974 output tokens, 542 of them reasoning, $0.00053). Two real anthropic calls were made in total this phase.
+- A Python edit wrote an en dash in cp1252 into `actions.test.ts`; caught and fixed before commit (all edited files re-checked as UTF-8).
+**Decisions & tradeoffs (please confirm):**
+- Error codes: `candidates_full`, `duplicate`, `search_running`, `needs_airports`, `provider_unavailable`, `ai_error`.
+- The AI gets one line per traveler (airports + city/country, no names), asks for (free slots + 2) ≤ 6, and only free slots are filled. City/country come from airports.json, not the model. Home airports are discouraged in the prompt but not filtered for AI (a trip to someone's home city is legitimate); midpoint does exclude them.
+- An AI reply with no usable airports is still a success (`added: []`) and counts against the cap.
+- Dev/test-only: `__test-` trips skip the AI cap and get `debug: { prompt, raw }` (NOTES Q3, SPEC #28).
+- `removeCandidate` also deletes fareSnapshots (beyond "fares and votes"), so stale price history can't come back if the airport is re-added.
+**Unsure about:**
+- The post-write max check and member re-sync are tested with the fake store, not against the real room under concurrency.
+- Reasoning length varies by prompt; 2048 has ~2× headroom over the one observed call. A longer trip/vibe could need more.
+- I only checked layout at 390px in headless Chromium, not on a real phone.
+**I verified myself (how):**
+- …
