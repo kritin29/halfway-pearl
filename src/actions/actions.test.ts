@@ -52,7 +52,7 @@ afterEach(() => {
 })
 
 describe('registry', () => {
-  it('exposes exactly the phase 3-4 actions', () => {
+  it('exposes exactly the phase 3-5 actions', () => {
     expect(Object.keys(actions).sort()).toEqual(
       [
         '__testLockTrip',
@@ -64,7 +64,9 @@ describe('registry', () => {
         'previewInvite',
         'removeCandidate',
         'removeGhost',
+        'startSearch',
         'suggestCandidates',
+        'toggleVote',
         'updateGhost',
       ].sort(),
     )

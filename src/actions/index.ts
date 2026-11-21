@@ -2,7 +2,9 @@ import type { ActionHandler } from 'deepspace/worker'
 import type { Env } from '../../worker'
 import { addCandidate, addMidpointHubs, removeCandidate, suggestCandidates } from './candidates'
 import { addGhost, removeGhost, updateGhost } from './ghosts'
+import { startSearch } from './search'
 import { createTrip, joinTrip, previewInvite, testLockTrip } from './trips'
+import { toggleVote } from './votes'
 
 /**
  * Every action is exposed at POST /api/actions/<name> (src/server/action-routes.ts)
@@ -19,6 +21,8 @@ export const actions: Record<string, ActionHandler<Env>> = {
   removeCandidate,
   addMidpointHubs,
   suggestCandidates,
+  startSearch,
+  toggleVote,
   // Test-only; refuses everything unless ALLOW_DEBUG_ROUTES === 'true' (src/server/test-seam.ts).
   __testLockTrip: testLockTrip,
 }

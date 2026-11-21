@@ -29,6 +29,9 @@ export type ErrorCode =
   | 'needs_airports'
   | 'provider_unavailable'
   | 'ai_error'
+  // Fare search and votes (src/actions/search.ts, src/actions/votes.ts)
+  | 'needs_candidates'
+  | 'enqueue_failed'
 
 export type Failure = { success: false; error: string; code: ErrorCode }
 
@@ -65,6 +68,8 @@ export interface Trip {
   id: string
   data: TripData
   createdBy: string
+  /** Last write to the trip row (ISO). Used to spot a search that died mid-run. */
+  updatedAt: string
 }
 
 export type Access = { ok: true; trip: Trip } | { ok: false; result: Failure }
@@ -80,6 +85,7 @@ export async function loadTrip(tools: ActionTools, tripId: string): Promise<Acce
     trip: {
       id: record.recordId,
       createdBy: record.createdBy,
+      updatedAt: record.updatedAt,
       data: { ...data, memberIds: parseIdList(record.data.memberIds) },
     },
   }
