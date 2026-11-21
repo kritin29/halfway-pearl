@@ -240,6 +240,13 @@ export function registerAuthAndIntegrationRoutes(app: Hono<AppContext>): void {
     const config = lookupOwn(integrations, integrationName)
     const billingMode = config?.billing ?? 'developer'
 
+    // Server-only integrations (paid, capped in `usage`) are never proxied
+    // for the browser, signed in or not. Server code reaches them through
+    // `tools.integration` (src/server/app-tools.ts). SPEC §11, NOTES C4.
+    if (config?.serverOnly) {
+      return c.json({ error: 'This integration is only available to the server' }, 403)
+    }
+
     // Sign-in is required unless the app opts this integration into anonymous
     // use; developer billing would otherwise let any visitor spend the owner's
     // credits. User billing always needs a caller to bill.

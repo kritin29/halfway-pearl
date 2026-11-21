@@ -20,11 +20,23 @@
  * `callComposio(env, ..., { asUser })` from 'deepspace/worker' instead.
  */
 
-export const integrations: Record<
-  string,
-  { billing: 'developer' | 'user'; anonymous?: boolean }
-> = {
+export interface IntegrationConfig {
+  billing: 'developer' | 'user'
+  anonymous?: boolean
+  /**
+   * Halfway addition (SPEC §11, NOTES C4): reachable only from server code
+   * (`tools.integration` in actions/jobs/cron, after the `usage` cap checks).
+   * The browser proxy `/api/integrations/:name/:endpoint` answers 403, so a
+   * signed-in user can't spend the owner's credits around the caps or use
+   * `email/send` as a relay.
+   */
+  serverOnly?: boolean
+}
+
+export const integrations: Record<string, IntegrationConfig> = {
   google: { billing: 'user' },
   composio: { billing: 'user' },
-  // openai: { billing: 'developer', anonymous: true },
+  serpapi: { billing: 'developer', serverOnly: true },
+  anthropic: { billing: 'developer', serverOnly: true },
+  email: { billing: 'developer', serverOnly: true },
 }
