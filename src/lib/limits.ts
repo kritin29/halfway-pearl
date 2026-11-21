@@ -39,6 +39,16 @@ export const LIMITS = {
   maxTravelers: 8,
   /** Max trips one cron run enqueues for watching. */
   maxWatchTripsPerCronRun: 10,
+  /** A watch run re-checks at most this many destinations (top by votes, or the locked one). */
+  watchShortlistSize: 3,
+  /**
+   * Watching stops once the outbound date is this many days away or fewer
+   * (calendar days in WATCH_TIMEZONE). 1 = the cron and "Check fares now"
+   * stop the day before departure.
+   */
+  watchStopsDaysBefore: 1,
+  /** A queued "Check fares now" with no result after this long is treated as lost (its job died). */
+  staleWatchMs: 20 * 60 * 1000,
   /** Max trips one user may create per day (UTC). Abuse cap; creating a trip costs nothing. */
   maxTripsCreatedPerUserPerDay: 10,
   /** At most one progress write to the trip row per this many ms while a search runs. */
@@ -71,6 +81,9 @@ export const INPUT_LIMITS = {
 
 /** Same keys as LIMITS with plain number values, so tests can pass tuned limits. */
 export type Limits = { readonly [K in keyof typeof LIMITS]: number }
+
+/** The fare watch's calendar: the cron's timezone, also used for "how many days until the trip". */
+export const WATCH_TIMEZONE = 'America/Chicago'
 
 /** Group drop alert: total must fall by at least max(DROP_MIN_USD, DROP_MIN_FRACTION × previous). */
 export const DROP_MIN_USD = 50

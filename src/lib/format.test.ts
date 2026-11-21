@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dateRange, hourLabel, localToday, shortDate } from './format'
+import { dateRange, hourLabel, localToday, shortDate, timeAgo } from './format'
 
 describe('format', () => {
   it('shortDate reads the calendar date without timezone shifts', () => {
@@ -19,5 +19,17 @@ describe('format', () => {
 
   it('localToday pads month and day', () => {
     expect(localToday(new Date(2026, 0, 5))).toBe('2026-01-05')
+  })
+})
+
+describe('timeAgo', () => {
+  const now = new Date('2026-11-21T12:00:00Z')
+  it('reads minutes, hours and days', () => {
+    expect(timeAgo('2026-11-21T11:59:40Z', now)).toBe('just now')
+    expect(timeAgo('2026-11-21T11:55:00Z', now)).toBe('5 min ago')
+    expect(timeAgo('2026-11-21T09:00:00Z', now)).toBe('3 h ago')
+    expect(timeAgo('2026-11-20T09:00:00Z', now)).toBe('1 day ago')
+    expect(timeAgo('2026-11-18T09:00:00Z', now)).toBe('3 days ago')
+    expect(timeAgo(null, now)).toBe('')
   })
 })

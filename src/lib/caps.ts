@@ -125,6 +125,23 @@ export function emailsAllowed(
   return Math.max(0, Math.min(wanted, left))
 }
 
+/**
+ * Does a finished run give back the daily search it was counted against?
+ * Only when it ended because the provider was unavailable AND it made no
+ * successful real call and no failed call that may have been billed: the
+ * platform released billing for the provider failure, so the run cost
+ * nothing. Partial outages (some fares fetched) still count.
+ */
+export function refundsDailyCount(run: {
+  providerUnavailable: boolean
+  /** Real SerpApi calls that returned flights. */
+  liveSuccesses: number
+  /** Real SerpApi calls that failed with something other than provider_unavailable (counted as billed). */
+  billedErrors: number
+}): boolean {
+  return run.providerUnavailable && run.liveSuccesses === 0 && run.billedErrors === 0
+}
+
 /** The ledger's day bucket: the UTC calendar date, `YYYY-MM-DD`. */
 export function usageDay(now: Date): string {
   return now.toISOString().slice(0, 10)
@@ -136,6 +153,8 @@ export const usageKeys = {
   serpapiTrip: (tripId: string) => `serpapi:trip:${tripId}`,
   fullSearchTrip: (tripId: string) => `search:full:trip:${tripId}`,
   watchTrip: (tripId: string) => `search:watch:trip:${tripId}`,
+  /** Set by the daily cron once it has enqueued a watch for this trip today. */
+  watchCronTrip: (tripId: string) => `watch:cron:trip:${tripId}`,
   userTripsSearched: (userId: string) => `search:user:${userId}`,
   userSearchedTrip: (userId: string, tripId: string) => `search:user:${userId}:trip:${tripId}`,
   aiUser: (userId: string) => `ai:user:${userId}`,

@@ -35,6 +35,9 @@ export type ErrorCode =
   // Lock (src/actions/lock.ts)
   | 'not_ready'
   | 'incomplete'
+  // Fare watch (src/actions/search.ts checkFaresNow)
+  | 'watch_running'
+  | 'watch_ended'
 
 export type Failure = { success: false; error: string; code: ErrorCode }
 

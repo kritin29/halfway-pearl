@@ -28,6 +28,11 @@ export const tripsSchema: CollectionSchema = {
     { name: 'searchProgress', storage: 'number', interpretation: 'plain' },
     { name: 'searchMessage', storage: 'text', interpretation: 'plain', maxLength: 200 },
     { name: 'searchError', storage: 'text', interpretation: 'plain', maxLength: 300 },
+    // Fare watch (SPEC §8 mode 'watch'): set when a watch run is enqueued
+    // (checkFaresNow or the cron), cleared by the job when it finishes.
+    { name: 'watchQueuedAt', storage: 'text', interpretation: { kind: 'datetime' } },
+    // Why the last watch run couldn't check everything; null when it did. Never contains budgets.
+    { name: 'watchError', storage: 'text', interpretation: 'plain', maxLength: 300 },
   ],
   uniqueOn: ['inviteCode'],
   ownerField: 'organizerId',

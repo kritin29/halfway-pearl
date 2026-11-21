@@ -205,3 +205,188 @@ export function buildLockEmail(input: LockEmailInput): EmailMessage {
 export function emailSendBody(message: EmailMessage): { to: string; subject: string; html: string; text: string } {
   return { to: message.to, subject: message.subject, html: message.html, text: message.text }
 }
+
+// ---------------------------------------------------------------------------
+// Fare-watch emails (SPEC §3.9, §8.7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Dedupe key for one group drop email: one per watch run (job) and recipient,
+ * so a retry or a duplicate delivery of the same run never resends. A later
+ * run only emails again if it finds a NEW drop against the newer snapshot.
+ */
+export function dropEmailKey(tripId: string, jobId: string, userId: string): string {
+  return `drop|${tripId}|${jobId}|${userId}`
+}
+
+/**
+ * Dedupe key for the private "now within your budget" email. No date and no
+ * run id: a traveler gets it the FIRST time their fare to a destination
+ * crosses under their budget, never again for that destination.
+ */
+export function underBudgetEmailKey(tripId: string, iata: string, userId: string): string {
+  return `under|${tripId}|${iata}|${userId}`
+}
+
+export interface DropEmailInput {
+  appUrl: string
+  tripId: string
+  tripName: string
+  outboundDate: string
+  returnDate: string
+  recipient: { displayName: string; email: string }
+  /** Each shortlisted destination whose group total dropped, with the recipient's OWN current fare. */
+  drops: ReadonlyArray<{
+    iata: string
+    city: string
+    previousTotal: number
+    currentTotal: number
+    /** The recipient's own round-trip fare there now (0 = they live there), or null. */
+    yourFare: number | null
+  }>
+}
+
+const cents = (n: number) => Math.round(n * 100) / 100
+
+/**
+ * "The trip got cheaper" email to one member of the group. Group totals and
+ * the recipient's own fare only: the builder has no budget input, so a group
+ * email can never mention anyone's budget.
+ */
+export function buildDropEmail(input: DropEmailInput): EmailMessage {
+  if (!isEmailAddress(input.recipient.email)) throw new Error('buildDropEmail: invalid recipient address')
+  if (input.drops.length === 0) throw new Error('buildDropEmail: no drops')
+  const tripName = oneLine(input.tripName, 80) || 'your trip'
+  const name = oneLine(input.recipient.displayName, 40) || 'there'
+  const when = dateRange(input.outboundDate, input.returnDate)
+  const tripLink = tripUrl(input.appUrl, input.tripId)
+  const lines = input.drops.map((d) => {
+    const city = oneLine(d.city, 60) || d.iata
+    return {
+      place: `${city} (${d.iata})`,
+      change: `group total ${usd(d.previousTotal)} → ${usd(d.currentTotal)} (${usd(cents(d.previousTotal - d.currentTotal))} less)`,
+      yours:
+        d.yourFare === 0
+          ? 'You live there: no flight needed.'
+          : d.yourFare !== null && d.yourFare > 0
+            ? `Your fare: ${usd(d.yourFare)} round trip.`
+            : null,
+    }
+  })
+  const first = input.drops[0]
+  const firstCity = oneLine(first.city, 60) || first.iata
+  const subject =
+    input.drops.length === 1
+      ? oneLine(`${BRAND}: ${firstCity} got ${usd(cents(first.previousTotal - first.currentTotal))} cheaper for ${tripName}`, 120)
+      : oneLine(`${BRAND}: fares dropped for ${tripName}`, 120)
+
+  const text = [
+    `Hi ${name},`,
+    '',
+    `${BRAND}’s fare check found lower prices for ${tripName} (${when}):`,
+    '',
+    ...lines.flatMap((l) => [`- ${l.place}: ${l.change}`, ...(l.yours ? [`  ${l.yours}`] : [])]),
+    '',
+    'Prices change quickly. See the latest fares and booking links:',
+    tripLink,
+    '',
+    `— ${BRAND}`,
+    `You’re getting this because the fare watch is on for ${tripName}.`,
+  ].join('\n')
+
+  const p = (inner: string, style = '') => `<p style="margin:0 0 12px;${style}">${inner}</p>`
+  const html = [
+    '<!doctype html><html><body style="margin:0;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827;line-height:1.5">',
+    '<div style="max-width:520px;margin:0 auto">',
+    p(`<strong style="font-size:18px">${BRAND}</strong>`),
+    p(`Hi ${escapeHtml(name)},`),
+    p(`${BRAND}’s fare check found lower prices for <strong>${escapeHtml(tripName)}</strong> (${escapeHtml(when)}):`),
+    `<ul style="margin:0 0 12px;padding-left:20px">${lines
+      .map(
+        (l) =>
+          `<li style="margin-bottom:6px"><strong>${escapeHtml(l.place)}</strong>: ${escapeHtml(l.change)}${
+            l.yours ? `<br><span style="color:#4b5563">${escapeHtml(l.yours)}</span>` : ''
+          }</li>`,
+      )
+      .join('')}</ul>`,
+    p(`Prices change quickly. <a href="${escapeHtml(tripLink)}" style="color:#2563eb">See the latest fares and booking links</a>.`),
+    p(
+      `— ${BRAND}<br>You’re getting this because the fare watch is on for ${escapeHtml(tripName)}.`,
+      'color:#6b7280;font-size:13px',
+    ),
+    '</div></body></html>',
+  ].join('')
+
+  return { to: input.recipient.email, subject, html, text }
+}
+
+export interface UnderBudgetEmailInput {
+  appUrl: string
+  tripId: string
+  tripName: string
+  outboundDate: string
+  returnDate: string
+  destination: { iata: string; city: string }
+  recipient: { displayName: string; email: string; homeAirports: readonly string[] }
+  /** The recipient's own current fare row for that destination. */
+  fare: FareRow
+}
+
+/**
+ * Private "your fare now fits your budget" email to ONE traveler. It says
+ * the fare is within their budget but never states the amount (the builder
+ * doesn't take one), and it names nobody else.
+ */
+export function buildUnderBudgetEmail(input: UnderBudgetEmailInput): EmailMessage {
+  if (!isEmailAddress(input.recipient.email)) throw new Error('buildUnderBudgetEmail: invalid recipient address')
+  const tripName = oneLine(input.tripName, 80) || 'your trip'
+  const name = oneLine(input.recipient.displayName, 40) || 'there'
+  const city = oneLine(input.destination.city, 60) || input.destination.iata
+  const iata = input.destination.iata
+  const when = dateRange(input.outboundDate, input.returnDate)
+  const tripLink = tripUrl(input.appUrl, input.tripId)
+  const price = typeof input.fare.price === 'number' ? usd(input.fare.price) : 'lower'
+  const origin = input.fare.originIata ?? normalizeHomes(input.recipient.homeAirports).join('/')
+  const bookUrl =
+    safeBookingUrl(input.fare.bookingUrl) ??
+    googleFlightsUrl({
+      homeAirports: input.fare.originIata ? [input.fare.originIata] : input.recipient.homeAirports,
+      candidateIata: iata,
+      outboundDate: input.outboundDate,
+      returnDate: input.returnDate,
+    })
+
+  const subject = oneLine(`${BRAND}: your fare to ${city} now fits your budget`, 120)
+  const headline = `Your round trip from ${origin} to ${city} (${iata}) is now ${price}, within the private budget you set for ${tripName}.`
+  const privacy = 'Only you get this email. Nobody else in the group can see your budget.'
+
+  const text = [
+    `Hi ${name},`,
+    '',
+    headline,
+    `Dates: ${when}.`,
+    '',
+    `See it on Google Flights: ${bookUrl}`,
+    `Your trip in ${BRAND}: ${tripLink}`,
+    '',
+    privacy,
+    `— ${BRAND}`,
+  ].join('\n')
+
+  const p = (inner: string, style = '') => `<p style="margin:0 0 12px;${style}">${inner}</p>`
+  const html = [
+    '<!doctype html><html><body style="margin:0;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827;line-height:1.5">',
+    '<div style="max-width:520px;margin:0 auto">',
+    p(`<strong style="font-size:18px">${BRAND}</strong>`),
+    p(`Hi ${escapeHtml(name)},`),
+    p(escapeHtml(headline)),
+    p(`Dates: ${escapeHtml(when)}.`),
+    p(
+      `<a href="${escapeHtml(bookUrl)}" style="color:#2563eb">See it on Google Flights</a> · <a href="${escapeHtml(tripLink)}" style="color:#2563eb">Open your trip in ${BRAND}</a>`,
+    ),
+    p(`${escapeHtml(privacy)}<br>— ${BRAND}`, 'color:#6b7280;font-size:13px'),
+    '</div></body></html>',
+  ].join('')
+
+  return { to: input.recipient.email, subject, html, text }
+}

@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   appUrlFor,
+  buildDropEmail,
   buildLockEmail,
+  buildUnderBudgetEmail,
+  dropEmailKey,
+  underBudgetEmailKey,
   emailSendBody,
   escapeHtml,
   isEmailAddress,
@@ -151,5 +155,80 @@ describe('helpers', () => {
     expect(oneLine('x'.repeat(100), 10)).toBe(`${'x'.repeat(9)}…`)
     expect(lockEmailKey('t1', 'BNA', 'user_bob')).toBe('lock|t1|BNA|user_bob')
     expect(appUrlFor('halfway-pearl')).toBe('https://halfway-pearl.app.space')
+  })
+})
+
+describe('watch emails', () => {
+  const base = {
+    appUrl: 'https://halfway-pearl.app.space',
+    tripId: 'trip_1',
+    tripName: 'Spring <b>break</b>',
+    outboundDate: '2026-12-11',
+    returnDate: '2026-12-13',
+  }
+
+  it('keys: a group drop is per run and person; the private email is per destination and person, with no date', () => {
+    expect(dropEmailKey('trip_1', 'job_9', 'user_bob')).toBe('drop|trip_1|job_9|user_bob')
+    expect(underBudgetEmailKey('trip_1', 'BNA', 'user_bob')).toBe('under|trip_1|BNA|user_bob')
+  })
+
+  it('group drop email: one recipient, old → new group total, their own fare, escaped, link to the trip', () => {
+    const msg = buildDropEmail({
+      ...base,
+      recipient: { displayName: 'Bob', email: 'bob@example.test' },
+      drops: [{ iata: 'BNA', city: 'Nashville', previousTotal: 900, currentTotal: 820, yourFare: 187 }],
+    })
+    expect(msg.to).toBe('bob@example.test')
+    expect(msg.subject).toBe('Halfway: Nashville got $80 cheaper for Spring <b>break</b>')
+    expect(msg.text).toContain('Nashville (BNA): group total $900 → $820 ($80 less)')
+    expect(msg.text).toContain('Your fare: $187 round trip.')
+    expect(msg.text).toContain('https://halfway-pearl.app.space/t/trip_1')
+    expect(msg.html).toContain('Spring &lt;b&gt;break&lt;/b&gt;')
+    expect(msg.html).not.toContain('<b>break</b>')
+    expect(`${msg.text}${msg.html}`.toLowerCase()).not.toContain('budget')
+  })
+
+  it('group drop email with several destinations, and for someone who lives there', () => {
+    const msg = buildDropEmail({
+      ...base,
+      recipient: { displayName: 'Grandpa', email: 'g@example.test' },
+      drops: [
+        { iata: 'BNA', city: 'Nashville', previousTotal: 900, currentTotal: 820, yourFare: 0 },
+        { iata: 'AUS', city: 'Austin', previousTotal: 1500, currentTotal: 1400, yourFare: null },
+      ],
+    })
+    expect(msg.subject).toBe('Halfway: fares dropped for Spring <b>break</b>')
+    expect(msg.text).toContain('You live there: no flight needed.')
+    expect(msg.text).toContain('Austin (AUS): group total $1,500 → $1,400 ($100 less)')
+  })
+
+  it('refuses a bad address or an empty drop list', () => {
+    expect(() => buildDropEmail({ ...base, recipient: { displayName: 'x', email: 'a@b.c, d@e.f' }, drops: [{ iata: 'BNA', city: 'N', previousTotal: 1, currentTotal: 0, yourFare: null }] })).toThrow()
+    expect(() => buildDropEmail({ ...base, recipient: { displayName: 'x', email: 'a@b.co' }, drops: [] })).toThrow()
+  })
+
+  it('private email: says it fits their budget without the amount, names nobody else, safe booking link', () => {
+    const msg = buildUnderBudgetEmail({
+      ...base,
+      destination: { iata: 'BNA', city: 'Nashville' },
+      recipient: { displayName: 'Bob', email: 'bob@example.test', homeAirports: ['BOS'] },
+      fare,
+    })
+    expect(msg.to).toBe('bob@example.test')
+    expect(msg.subject).toBe('Halfway: your fare to Nashville now fits your budget')
+    expect(msg.text).toContain('from BOS to Nashville (BNA) is now $187, within the private budget you set')
+    expect(msg.text).toContain('Only you get this email.')
+    expect(msg.text).toContain('https://www.google.com/travel/flights?tfs=abc123')
+    // The builder takes no budget, so no other dollar amount can appear.
+    expect(msg.text.match(/\$\d+(?:,\d{3})*/g)).toEqual(['$187'])
+
+    const unsafe = buildUnderBudgetEmail({
+      ...base,
+      destination: { iata: 'BNA', city: 'Nashville' },
+      recipient: { displayName: 'Bob', email: 'bob@example.test', homeAirports: ['BOS'] },
+      fare: { ...fare, bookingUrl: 'javascript:alert(1)' },
+    })
+    expect(unsafe.text).not.toContain('javascript:')
+    expect(unsafe.text).toContain('https://www.google.com/travel/flights?q=')
   })
 })

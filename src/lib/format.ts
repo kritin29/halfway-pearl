@@ -34,3 +34,16 @@ export function localToday(now: Date = new Date()): string {
   const d = String(now.getDate()).padStart(2, '0')
   return `${y}-${m}-${d}`
 }
+
+/** "just now", "5 min ago", "3 h ago", "2 days ago" for an ISO datetime; '' if unparseable. */
+export function timeAgo(iso: string | null | undefined, now: Date = new Date()): string {
+  const t = Date.parse(iso ?? '')
+  if (!Number.isFinite(t)) return ''
+  const min = Math.floor((now.getTime() - t) / 60_000)
+  if (min < 1) return 'just now'
+  if (min < 60) return `${min} min ago`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `${h} h ago`
+  const d = Math.floor(h / 24)
+  return `${d} ${d === 1 ? 'day' : 'days'} ago`
+}

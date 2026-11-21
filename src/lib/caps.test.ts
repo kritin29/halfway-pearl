@@ -6,6 +6,7 @@ import {
   mayCreateTrip,
   mayMakeCall,
   planCalls,
+  refundsDailyCount,
   usageDay,
   usageKeys,
   usageRecordId,
@@ -125,5 +126,20 @@ describe('mayCreateTrip', () => {
     expect(mayCreateTrip(9)).toBe(true)
     expect(mayCreateTrip(10)).toBe(false)
     expect(mayCreateTrip(0, { ...LIMITS, maxTripsCreatedPerUserPerDay: 0 })).toBe(false)
+  })
+})
+
+describe('refundsDailyCount: a provider outage that cost nothing gives the search back', () => {
+  it('refunds when the provider was unavailable and no real call succeeded or was billed', () => {
+    expect(refundsDailyCount({ providerUnavailable: true, liveSuccesses: 0, billedErrors: 0 })).toBe(true)
+  })
+  it('a partial outage (some fares fetched) still counts', () => {
+    expect(refundsDailyCount({ providerUnavailable: true, liveSuccesses: 2, billedErrors: 0 })).toBe(false)
+  })
+  it('a billed error before the outage still counts', () => {
+    expect(refundsDailyCount({ providerUnavailable: true, liveSuccesses: 0, billedErrors: 1 })).toBe(false)
+  })
+  it('a run without an outage never refunds', () => {
+    expect(refundsDailyCount({ providerUnavailable: false, liveSuccesses: 0, billedErrors: 0 })).toBe(false)
   })
 })

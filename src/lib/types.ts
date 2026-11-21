@@ -22,6 +22,10 @@ export interface TripData {
   searchProgress: number | null
   searchMessage: string | null
   searchError: string | null
+  /** Set while a watch run is queued or running (ISO datetime), else null. */
+  watchQueuedAt?: string | null
+  /** Why the last watch run couldn't check everything; null when it did. */
+  watchError?: string | null
 }
 
 export interface TravelerData {
@@ -36,6 +40,23 @@ export interface TravelerData {
   earliestDepartHour: number
   hasBudget: number
   booked: number
+}
+
+export interface FareSnapshotData {
+  tripId: string
+  memberIds: string[]
+  candidateIata: string
+  /** Null when the candidate wasn't complete at that check. */
+  groupTotal: number | null
+  maxFare: number | null
+  checkedAt: string
+}
+
+export interface VoteData {
+  tripId: string
+  memberIds: string[]
+  userId: string
+  candidateIata: string
 }
 
 export interface BudgetData {
