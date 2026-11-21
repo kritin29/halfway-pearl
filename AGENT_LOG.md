@@ -137,3 +137,25 @@ Format:
 **I verified myself (how):**
 - …
 
+
+---
+
+## Live check — production test seam is off — Sat Nov 21
+**Agent (Claude Code) did:** ran a read-only check against https://halfway-pearl.app.space as test account Alice.
+Command: `npx playwright test --config scripts/live-check/playwright.live.config.ts`
+```
+LIVE POST /api/actions/noSuchAction {} -> HTTP 404 {"error":"Action not found"}
+LIVE POST /api/actions/__testLockTrip {} -> HTTP 200 {"success":false,"error":"Not available.","code":"not_found"}
+LIVE POST /api/actions/__testLockTrip {"tripId":"0_livecheck"} -> HTTP 200 {"success":false,"error":"Not available.","code":"not_found"}
+LIVE GET /api/debug/records -> HTTP 404 404 Not Found
+  ✓  1 scripts\live-check\prod-flags.live.ts:18:1 › production has the test seam off (Alice) (5.2s)
+  1 passed (6.1s)
+```
+- Line 1: Alice's token is accepted (an unknown action is 404, not 401).
+- Lines 2–3: `__testLockTrip` is deployed and refuses at its first line, `ALLOW_DEBUG_ROUTES !== 'true'`.
+- Line 4: `/api/debug/*` is 404, which that route returns only when `ALLOW_DEBUG_ROUTES !== 'true'`.
+- The `__test-` cap exemption is `isTestTrip()`, which requires the same `ALLOW_DEBUG_ROUTES === 'true'`, so it is off in production.
+- Control: the same check against a local server (flag on) FAILS (`__testLockTrip {}` → `invalid_params`), so it can tell the two apart.
+**Not done, on purpose:** I did not create `__test-` trips in production to hit the cap directly. That takes up to 10 trips plus an 11th refusal, and no trip can be deleted: there's no delete action, and `trips` has `delete: false` for every role, admin included. Production writes made: none to app data. Signing Alice in creates an auth session; the sign-in page load may have registered her `users` row if she had none.
+**I verified myself (how):**
+- …
