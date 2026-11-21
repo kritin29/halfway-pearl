@@ -140,6 +140,9 @@ tripId, memberIds, candidateIata, groupTotal, maxFare, checkedAt. Read `'collabo
 ### `fareCache` (server-only route cache)
 key (`fareCacheKey`: origin set | destination | outbound | return), itineraries (json: parsed options, no constraints applied), priceLevel, typicalLow, typicalHigh, bookingUrl, fetchedAt. `uniqueOn: ['key']`, recordId = key. Same all-false permissions as `usage` for `'*'`, `viewer`, `member`, `admin`. Holds flight options only: no user ids, names or budgets. Caching the route (not each traveler's chosen fare) lets every traveler from the same airports reuse one call with their *current* constraints. Fixture answers use `fixture|<tripId>|<key>` so they never answer a real search and test runs never share entries.
 
+### `emailLog` (server-only email dedupe)
+key (`lock|<tripId>|<IATA>|<userId>`; later kinds follow the same shape), kind, tripId, userId, iata, status (`sending` / `sent`), mocked (0/1), claimedAt, sentAt. `uniqueOn: ['key']`; random recordId so a second **create** of the same key fails with "Duplicate". Same all-false permissions as `usage` for `'*'`, `viewer`, `member`, `admin`. **Claim before send:** the sender creates the row (`sending`) first, sends, then marks it `sent`; a failed send deletes the claim so a retry can try again; a `sending` claim older than 10 min is treated as abandoned. Holds no addresses, names or budgets.
+
 ### `usage` (server-only spend ledger)
 day (YYYY-MM-DD), key (e.g. `serpapi:global`, `serpapi:trip:<id>`, `ai:user:<id>`, `email:trip:<id>`, `email:global`), count. `uniqueOn: ['day','key']`; written with `recordId = \`${day}|${key}\`` via `tools.create(…, recordId)` (upsert). Permissions: `'*'`, `viewer`, `member` **and `admin`** all `{ read: false, create: false, update: false, delete: false }` — unlisted roles fall back to `'*'`, and server tools bypass RBAC (`X-App-Action`). **Tested** three ways (NOTES §3): unit test with the SDK's `canRead/canCreate/canUpdate/canDelete`; two-user e2e probe through the RBAC-on agent tool route expecting zero rows and a refused create; and a cap test proving the server reads/writes it.
 
@@ -161,8 +164,8 @@ Every action: (1) load the trip with `tools.get`, (2) check the caller is in `me
 | `removeCandidate({tripId, iata})` | organizer | also deletes its fares, votes and fareSnapshots |
 | `startSearch({tripId})` | organizer | refuses `trip_locked`, and `search_running` while status=searching (unless the trip row hasn't been written for 20 min: the job died); needs ≥ 2 travelers with known home airports (`needs_airports`) and ≥ 1 candidate (`needs_candidates`); checks caps with `decideRunStart('full', …)` (`cap_reached` + the cap's message), increments counters, sets status=searching, `enqueueJob(env.JOB_ROOMS, \`app:${env.DEEPSPACE_APP_ID}\`, 'fare-search', {tripId, mode:'full'}, {maxAttempts: 2, enqueuedBy: userId})`, stores `searchJobId`, clears `searchError`. `enqueueJob` throws on failure → trip fields and counters rolled back, `code: 'enqueue_failed'`. Dev/test only: `__test-` trips skip the per-user and global budgets (fixture answers spend nothing), never the per-trip one |
 | `toggleVote({tripId, iata})` | member | creates or deletes the caller's own vote (userId from the JWT); the candidate must be on the trip (`not_found`); refused on a locked trip (`trip_locked`); a duplicate from a double click counts as voted |
-| `lockTrip({tripId, iata})` | organizer | status=locked, lockedIata; emails each real member their booking link (within email caps) |
-| `setWatch({tripId, enabled})` | organizer | |
+| `lockTrip({tripId, iata})` | organizer | Only from status `results` (`search_running` while searching, `not_ready` before results) and only for a candidate with `complete = 1` (`incomplete`; unknown → `not_found`). Sets status=locked, lockedIata, then emails each **real member** (not ghosts, still in memberIds, with a valid address on their `users` row) their own fare, origin, times and booking link (`src/lib/email.ts`; "Halfway" in subject and body, one `to`, no reply_to/cc/bcc, never a budget or another address). Each send claims an `emailLog` row first, so retries never double-send, and checks the email caps (`emailsAllowed`) first; real sends (and failed ones unless billing was released) count in `usage`. An email failure never undoes the lock. Calling it again for the **same** destination is the retry (sends only what's missing; the Book tab's "Email booking links again"); a different destination on a locked trip → `trip_locked`. Returns `{ emails: { sent, alreadySent, noEmail, capped, failed, mocked } }` |
+| `setWatch({tripId, enabled})` | organizer | sets `watchEnabled` 0/1. The Book tab shows the switch disabled, labelled "Daily fare watch: coming next", until the watch exists (Phase 7) |
 | `checkFaresNow({tripId})` | organizer | enqueues `fare-search` with `mode:'watch'` (same caps) |
 
 **Destination rules (all four candidate actions).** The list is frozen while `status` is `searching` (`search_running`) or `locked` (`trip_locked`). The 6-candidate maximum is checked before writing and again after (two writers at once: the newer rows back out, as in `joinTrip`). New candidate rows copy the trip's current `memberIds` and are re-synced if someone joined mid-write. In dev/test only (`ALLOW_DEBUG_ROUTES === 'true'`), `__test-` trips skip the AI cap and `suggestCandidates` also returns `debug: { prompt, raw }`.
@@ -209,7 +212,7 @@ Payload `{ tripId, mode: 'full' | 'watch' }`.
 4. Cache: reuse a route fetched < 6h ago for the same key (full mode only), from `fareCache`; each traveler's constraints are applied to the cached options. Cached fare rows keep the time the route was really fetched.
 5. Run calls with small concurrency (e.g. 4 at a time), write each fare row as it arrives (live fill-in), `ctx.progress(done/total, 'Checked ORD→BNA')` **and** a throttled `tools.update('trips', tripId, { searchProgress, searchMessage })` so members see progress, honor `ctx.signal`. `usage` increments go through one serial promise chain (get-then-update isn't atomic; caps are soft by ±1).
 6. Compute aggregates with `ranking.ts` (needs budgets — server-side read) and update candidates; write a `fareSnapshots` row per candidate.
-7. `mode:'watch'`: compare with the previous snapshot → group drop email; per-traveler private "now under your budget" email (only when crossing the threshold, not every day). Emails are deduped by markers so a retry doesn't resend, and stay within email caps.
+7. `mode:'watch'`: compare with the previous snapshot → group drop email; per-traveler private "now under your budget" email (only when crossing the threshold, not every day). Emails are deduped by `emailLog` claims (as for lock emails) so a retry doesn't resend, and stay within email caps.
 8. Set trip status=results (unless locked), lastSearchAt, searchProgress=1. Pairs that got no answer (run/global cap, provider unavailable, cancelled) get a fare row with `status 'error'`, so the card lists them as missing instead of showing an old price; `searchError` says why (cap: how many routes weren't checked; cancel: "stopped before it finished"; any `error` route: a generic line). Fare rows whose traveler or candidate is gone, or whose traveler has no home airports now, are deleted at the start of the run. Rows are written with deterministic ids (`tripId|iata|travelerId`, snapshots `tripId|iata|jobId`), and memberIds are re-propagated at the end if someone joined mid-run.
 Mode `watch` is not built yet (Phase 5 built `full`); the handler returns `{ skipped: 'unsupported_mode' }` without touching the trip.
 9. Failure: a storage error in one call stops the other workers and the handler waits for them before failing, so nothing writes after it gives up. A retry re-runs the whole handler (keep it idempotent; the < 6h cache makes it cheap). On the final failed attempt (`job.attempts >= job.maxAttempts`), set `searchError` and move status back from `searching`. A `provider_unavailable` failure (§7 "Integration failures") is not a thrown failure: no retry, no usage increment for that call.
@@ -235,13 +238,16 @@ Arming: the scaffold's `armCronRoom` middleware and deploy's own wake-up request
   - **Crew**: members & ghosts, each with airports and chips "constraints ✓", "budget set ✓". "Your settings" panel: airports, stops, red-eye, earliest hour, and **"Your private budget 🔒 Only you can see this."** Invite link copy button.
   - **Destinations**: candidate list, "Suggest with AI", "Add geographic middle", search-add input, "Find fares" button with live job progress.
   - **Results**: sort tabs, cards (see §3.6), per-person fare breakdown, your private fit line, vote button + tally.
-  - **Book**: locked destination, your booking link, group checklist, fare history sparkline, watch toggle, "Check fares now".
+  - **Book** (enabled once locked; members who haven't picked a tab land here): locked destination, your own fare and booking link, live group checklist "X of Y booked" (each member ticks their own `booked` on their own travelers row; the organizer ticks ghosts through `updateGhost`), organizer: "Email booking links again" and the watch toggle (disabled, "coming next"). Fare history sparkline and "Check fares now" come with the watch (Phase 7).
+  - **Results** (organizer, status `results`): "Lock this destination" on complete cards, with a confirm dialog; the locked card shows a Locked badge and votes close.
 - Every async surface has loading, empty, error-with-retry, and success states.
 
 ## 11. Integration billing config (`src/integrations.ts`)
 
 `serpapi`, `anthropic`, `email` → `{ billing: 'developer', serverOnly: true }` with **sign-in required** (do not set `anonymous: true`). Paid calls only from server actions/jobs, never directly from the client.
 **Enforced, not just a convention (NOTES C4):** the scaffold's browser proxy `/api/integrations/:name/:endpoint` would otherwise let any signed-in user call these with the owner's JWT, bypassing the `usage` caps (and turning `email/send` into an owner-billed spam relay). The proxy returns **403** for any integration marked `serverOnly`; server code still reaches them through `tools.integration`. API tests prove a signed-in browser POST to `/api/integrations/serpapi/flights` and `/api/integrations/email/send` gets 403.
+
+**Email seam (dev/test only, same gates as the fare fixture):** `src/server/email-source.ts` builds and validates each message but does **not** call `email/send` when `ALLOW_DEBUG_ROUTES === 'true'` and the trip name starts with `__test-`; such sends report `mocked: true` and don't touch `usage`. Trips named `__test-real-email-…` opt back into the real call, for the single api test. In production every send is real.
 
 **Caps live in `src/lib/limits.ts`:** SerpApi caps from §8, AI caps from §6, and email caps ($0.013/email): ≤ 20 emails per trip per day, ≤ 100 emails per day globally (starting values; tune there).
 
@@ -313,6 +319,16 @@ Hotels total (`serpapi/hotels`), flexible dates (±1 day), MapLibre map of origi
 | 33 | startSearch: `needs_candidates`, stale-search recovery (20 min), counters rolled back on `enqueue_failed`, dev/test budget exemption for `__test-` trips (per-trip cap still applies) | §6 startSearch | Phase 5 build (NOTES R2, R3) |
 | 34 | Job details: unanswered pairs marked `error`, stale fare rows removed, deterministic row ids, member re-sync, worker failure handling, watch mode deferred; fixture varied per route and not counted | §8 | Phase 5 build |
 | 35 | toggleVote rules spelled out | §6 | Phase 5 build |
+
+### 2026-11-21 — Phase 6 (lock, book, emails)
+| # | Change | Where in this spec | From |
+|---|---|---|---|
+| 36 | Phase 5 decisions approved: fareCache, 20-min stuck-search recovery, `__test-` budget exemptions, unanswered pairs as missing fares, the rest as described (NOTES S8: the ruling's wording on provider outages differs from what was built) | §5, §6, §8 | developer ruling |
+| 37 | `lockTrip` spelled out: status/complete checks and codes (`not_ready`, `incomplete`), real members only, own fare only, retry = same destination, email failure never undoes the lock | §6 | developer brief, NOTES S1–S5 |
+| 38 | New server-only `emailLog` collection: claim before send, so retries and concurrent calls never double-send | §5 `emailLog`, §8.7 | NOTES S1 |
+| 39 | Email seam for `__test-` trips in dev/test (mocked at the boundary, not counted); `__test-real-email-` opts into the real call | §11 | NOTES S2 |
+| 40 | `setWatch` built; its switch is shown disabled ("coming next") until Phase 7 | §6, §10 | developer brief |
+| 41 | Book and Results tab behaviour (checklist rules, lock confirm, Locked badge, default tab) | §10 | developer brief |
 
 ### 2026-11-21 — Phase 4 (destinations)
 | # | Change | Where in this spec | From |

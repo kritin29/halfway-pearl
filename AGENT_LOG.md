@@ -219,3 +219,36 @@ LIVE GET /api/debug/records -> HTTP 404 404 Not Found
 - Layout checked at 390px in headless Chromium only.
 **I verified myself (how):**
 - …
+
+
+---
+
+## Between phases — SerpApi retry — Sat Nov 21
+- Retried the one approved `serpapi/flights` call (ORD,MDW → BNA, Dec 11–13). Same provider 429 ("Your account has run out of searches."), billing released. Not retried; no fixture saved, nothing changed or committed. `flights.ts` is still unverified against a real response (NOTES R7).
+
+## Phase 6 — Lock, book and emails — Sat Nov 21
+**Agent (Claude Code) did:**
+- Phase 5 rulings recorded (SPEC #36). One wording mismatch flagged, not changed: NOTES S8.
+- `lockTrip` (`src/actions/lock.ts`, organizer): only from `results`, only a complete candidate (`not_ready`, `search_running`, `incomplete`, `not_found`, `trip_locked`); locks, then emails each real member (not ghosts) their own fare, origin, times and booking link. Email failure never undoes the lock; calling it again for the same destination sends only the missing emails. `setWatch` (organizer) sets `watchEnabled`.
+- Pure template builder `src/lib/email.ts`: one recipient per message, "Halfway" in subject and body, no budget input at all, user text escaped and kept on one line, safe booking links only (built Google Flights URL otherwise). Sender `src/server/lock-emails.ts`: `emailLog` claim before each send (new server-only collection, NOTES S1), per-email cap check (`emailsAllowed`), serial ledger, addresses never stored/logged/returned. Email seam `src/server/email-source.ts` (NOTES S2).
+- UI: Results → organizer "Lock this destination" on complete cards with a confirm dialog, Locked badge, toast with the email summary, jump to Book. Book tab enabled when locked: destination, your fare and booking link, live checklist "X of Y booked" (own row for members, ghosts via `updateGhost` for the organizer), "Email booking links again", watch switch disabled and labelled "Daily fare watch: coming next". Checked at 390px; made the disabled switch visibly dimmed.
+- Tests: `src/lib/email.test.ts` (11: content, no budget even with sloppy input, no other address, escaping, home/missing fares, unsafe links, address validation), `src/actions/lock.test.ts` (15: ghosts excluded, own fare only, caps per trip and global, retry and concurrent calls don't double-send, failure keeps the lock, billing-released not counted, stale claim, seam both ways, refusals, join refused after lock, setWatch), schema test for `emailLog`. e2e `tests/book.spec.ts` (two users). api: the one real email test, plus `lockTrip`/`setWatch` 401s.
+- Results: unit 21 files / 330 passed; `test run` (smoke+api) 34 passed, incl. the one real AI call ($0.00059) and the one real `email/send` call (`sent: 1`); `test run e2e` with both real-call tests excluded by `--grep` 47 passed; tsc 0, eslint 0. Real calls this phase: 1 email/send ($0.013), 1 anthropic, 0 SerpApi.
+- Mutation checks: dropping the ghost/member filter failed 4 lock tests; dropping the "already sent" check failed 6; both restored.
+**What broke / surprised me:**
+- My e2e expected Bob to stay on Results after the lock; his page moved to Book because he hadn't picked a tab (NOTES S7). Kept the behaviour, fixed the test.
+- The disabled Switch looked active: the primitive's `disabled:` styles don't match Base UI's `data-disabled`. Fixed locally on the Book tab.
+- A shell heredoc for the docs failed to parse and wrote nothing; redone with the Write tool.
+**Decisions & tradeoffs (please confirm):**
+- `emailLog` collection and claim-before-send (S1); `__test-` email seam and the `__test-real-email-` opt-in (S2).
+- Failed sends count against the caps unless billing was released (S4).
+- Retry = `lockTrip` again with the same destination, exposed as "Email booking links again" (S5).
+- Members who haven't picked a tab jump to Book on lock (S7).
+- Kept `__testLockTrip` (used by the invite-page e2e; still double-gated).
+**Unsure about:**
+- Delivery of the real email: accepted by the platform, but the test address is `@deepspace.test` (S3).
+- NOTES S8: your Phase 5 ruling says outages don't count toward the daily searches; the code counts them.
+- Concurrency of the claim pattern is tested with the fake store, not the real room.
+- Layout checked at 390px in headless Chromium only.
+**I verified myself (how):**
+- …
