@@ -289,6 +289,64 @@ describe('provider failures', () => {
     expect(tripRow(tripId).data).toMatchObject({ status: 'results', searchError: PROVIDER_UNAVAILABLE_MESSAGE })
   })
 
+  describe('refunding the daily full search (it cost nothing)', () => {
+    const fullKey = (tripId: string) => usageKeys.fullSearchTrip(tripId)
+    async function counted(tripId: string, day = DAY) {
+      data(await server().create('usage', { day, key: fullKey(tripId), count: 1 }, usageRecordId(day, fullKey(tripId))))
+    }
+    const countOn = (tripId: string, day: string) =>
+      store.rows('usage').find((r) => r.recordId === usageRecordId(day, fullKey(tripId)))?.data.count
+
+    it('provider_unavailable with zero successful real calls gives the search back', async () => {
+      const { tripId } = await setup()
+      await counted(tripId)
+      store.onIntegration(() => error429 as unknown as ActionResult<unknown>)
+      const job = { ...makeJob(tripId), payload: { tripId, mode: 'full', countedOn: DAY } }
+      const result = await runFareSearch(job, makeCtx().ctx, deps({ limits: limitsWith({ searchConcurrency: 1 }) }))
+      expect(result).toMatchObject({ providerUnavailable: true, refunded: true })
+      expect(countOn(tripId, DAY)).toBe(0)
+    })
+
+    it('a partial outage (some fares fetched) still counts', async () => {
+      const { tripId } = await setup()
+      await counted(tripId)
+      let n = 0
+      store.onIntegration((_e, body) =>
+        ++n <= 2 ? { success: true, data: fixtureResponse(body as SerpapiFlightsRequest) } : (error429 as unknown as ActionResult<unknown>),
+      )
+      const result = await runFareSearch(makeJob(tripId), makeCtx().ctx, deps({ limits: limitsWith({ searchConcurrency: 1 }) }))
+      expect(result).toMatchObject({ providerUnavailable: true, refunded: false, calls: 2 })
+      expect(countOn(tripId, DAY)).toBe(1)
+    })
+
+    it('an outage after a billed error still counts (that call may have cost money)', async () => {
+      const { tripId } = await setup()
+      await counted(tripId)
+      let n = 0
+      store.onIntegration(() =>
+        ++n === 1 ? { success: false, error: 'upstream exploded', code: 'upstream_provider_error' } : (error429 as unknown as ActionResult<unknown>),
+      )
+      const result = await runFareSearch(makeJob(tripId), makeCtx().ctx, deps({ limits: limitsWith({ searchConcurrency: 1 }) }))
+      expect(result).toMatchObject({ providerUnavailable: true, refunded: false })
+      expect(countOn(tripId, DAY)).toBe(1)
+    })
+
+    it('refunds the day the search was counted on, and never below zero', async () => {
+      const { tripId } = await setup()
+      await counted(tripId, '2026-11-19')
+      store.onIntegration(() => error429 as unknown as ActionResult<unknown>)
+      const job = { ...makeJob(tripId), payload: { tripId, mode: 'full', countedOn: '2026-11-19' } }
+      expect(await runFareSearch(job, makeCtx().ctx, deps())).toMatchObject({ refunded: true })
+      expect(countOn(tripId, '2026-11-19')).toBe(0)
+      expect(countOn(tripId, DAY)).toBeUndefined()
+
+      // Nothing left to give back: stays at 0.
+      await startSearching(tripId)
+      expect(await runFareSearch(job, makeCtx().ctx, deps())).toMatchObject({ refunded: false })
+      expect(countOn(tripId, '2026-11-19')).toBe(0)
+    })
+  })
+
   it('a generic error marks only that route, counts the call and the run continues', async () => {
     const { tripId } = await setup()
     store.onIntegration((_e, body) => {
@@ -377,8 +435,10 @@ describe('retries and failure', () => {
     expect(await runFareSearch(makeJob(tripId), makeCtx().ctx, deps())).toEqual({ skipped: 'not_searching' })
     expect(await runFareSearch(makeJob('trip_missing'), makeCtx().ctx, deps())).toEqual({ skipped: 'trip_gone' })
     expect(await runFareSearch({ ...makeJob(tripId), payload: { tripId } }, makeCtx().ctx, deps())).toEqual({ skipped: 'bad_payload' })
+    // A watch run on a trip without results yet has nothing to re-check.
+    data(await server().update('trips', tripId, { status: 'gathering' }))
     expect(await runFareSearch({ ...makeJob(tripId), payload: { tripId, mode: 'watch' } }, makeCtx().ctx, deps())).toEqual({
-      skipped: 'unsupported_mode',
+      skipped: 'not_watchable',
     })
     expect(flightCalls()).toHaveLength(0)
   })

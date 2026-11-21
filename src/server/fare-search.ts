@@ -1,31 +1,43 @@
 /**
- * The `fare-search` background job (SPEC §8), mode 'full'. Dispatched from
- * src/jobs.ts with `createAppTools(env, env.OWNER_USER_ID)`: RBAC is off, so
- * this module only ever touches the one trip named in the payload.
+ * The `fare-search` background job (SPEC §8). Dispatched from src/jobs.ts
+ * with `createAppTools(env, env.OWNER_USER_ID)`: RBAC is off, so this module
+ * only ever touches the one trip named in the payload.
+ *
+ * Mode 'full' (startSearch) checks every destination; mode 'watch'
+ * (checkFaresNow and the daily cron) re-checks only the shortlist: the
+ * locked destination, or else the top 3 by votes (src/lib/watch.ts).
  *
  * 1. Load the trip, travelers (constraints re-validated, NOTES G1),
  *    candidates and budgets (server-only; real travelers, positive amounts).
- * 2. Pairs = traveler × candidate. Home pairs get `homeFare()` with no call.
- *    Pairs with identical (origin set, destination, dates) share one call.
- * 3. Fresh (< 6h) cached routes are reused (`fareCache`).
+ * 2. Pairs = traveler × destination. Home pairs get `homeFare()` with no
+ *    call. Pairs with identical (origin set, destination, dates) share one call.
+ * 3. Fresh (< 6h) cached routes are reused (`fareCache`), in both modes.
  * 4. The rest run 4 at a time, at most `maxCallsPerRun` and never past the
  *    global daily budget. Each fare row is written as it arrives; progress
- *    goes to `ctx.progress` and (throttled) to the trip row. `usage`
- *    increments run through one serial chain.
- * 5. provider_unavailable → stop calling, mark the rest 'error', human
- *    message in `searchError`, the failed call isn't counted, no retry.
- * 6. `ranking.ts` aggregates every candidate → candidate rows + a
- *    `fareSnapshots` row each; status → results.
+ *    goes to `ctx.progress` and, in full mode (throttled), to the trip row.
+ *    `usage` increments run through one serial chain.
+ * 5. provider_unavailable → stop calling, the failed call isn't counted, no
+ *    retry. If the run made no successful and no billed call it cost
+ *    nothing, so the daily search (or watch check) it used is refunded.
+ * 6. `ranking.ts` aggregates → candidate rows + a `fareSnapshots` row each.
+ *
+ * Full mode marks every unanswered pair 'error' (cards list who's missing)
+ * and sets status → results. Watch mode never touches `status`: an
+ * unanswered pair keeps its previous fare, and a destination with any
+ * unanswered pair gets no new aggregate or snapshot (a half-fresh total
+ * would fake a drop). Watch mode then compares each new snapshot with the
+ * previous one (group drop email) and each traveler's new fare with their
+ * old one (private "now within your budget" email, first crossing only).
  *
  * Retries re-run everything: fare rows and snapshots have deterministic ids
- * (upserts, never duplicates) and the cache makes repeated routes free. On
- * the final failed attempt the trip leaves 'searching' with a generic error.
+ * (upserts, never duplicates), the cache makes repeated routes free, and
+ * emails are claimed in `emailLog` first, so nobody is emailed twice.
  *
  * Never logs or writes budgets, names with prices, or provider text to rows.
  */
 import type { ActionTools, Job, JobContext } from 'deepspace/worker'
 import { knownHomeAirports } from '../lib/airports'
-import { mayMakeCall, planCalls, usageDay, usageKeys } from '../lib/caps'
+import { mayMakeCall, planCalls, refundsDailyCount, usageDay, usageKeys } from '../lib/caps'
 import {
   buildFlightsRequest,
   chooseFare,
@@ -43,30 +55,59 @@ import {
 } from '../lib/flights'
 import { LIMITS, type Limits } from '../lib/limits'
 import { aggregateCandidate, type RankFare, type RankTraveler } from '../lib/ranking'
+import type { FareRow } from '../lib/results'
 import { isGhostId, type TripData } from '../lib/types'
+import {
+  dateInZone,
+  detectGroupDrop,
+  findBudgetCrossings,
+  isWatchWindowOpen,
+  selectShortlist,
+  type WatchFare,
+} from '../lib/watch'
+import type { DeliveryDeps } from './email-delivery'
 import { searchFlights as defaultSearchFlights, usesFixture, type FlightsEnv } from './flights-source'
 import { isNotFound, loadTrip, must, type Trip } from './trip-access'
 import { propagateMemberIds, sameIds } from './trip-rows'
 import { getUsageCount, incrementUsage } from './usage'
+import { fareMapKey, sendWatchEmails, type DestinationDrop, type WatchEmailReport } from './watch-alerts'
 
 export interface FareSearchPayload {
   tripId: string
   mode: 'full' | 'watch'
+  /**
+   * The usage day (UTC, `YYYY-MM-DD`) on which the enqueuer counted this run
+   * against the trip's daily cap, so a refund lands on the same day even if
+   * the job runs after midnight. Optional: older jobs fall back to today.
+   */
+  countedOn?: string
 }
 
 export interface FareSearchDeps {
   tools: ActionTools
-  env: FlightsEnv
+  env: FlightsEnv & { APP_NAME?: string }
   now?: () => Date
   /** The flights source (src/server/flights-source.ts); swapped in tests. */
   searchFlights?: typeof defaultSearchFlights
   limits?: Limits
   fixtureDelayMs?: number
+  /** email/send boundary for watch emails (src/server/email-source.ts); swapped in tests. */
+  sendEmail?: DeliveryDeps['send']
 }
 
+export type FareSearchSkip =
+  | 'bad_payload'
+  | 'trip_gone'
+  | 'superseded'
+  | 'not_searching'
+  | 'not_watchable'
+  | 'watch_ended'
+  | 'nothing_to_watch'
+
 export type FareSearchResult =
-  | { skipped: 'bad_payload' | 'unsupported_mode' | 'trip_gone' | 'superseded' | 'not_searching' }
+  | { skipped: FareSearchSkip }
   | {
+      mode: 'full' | 'watch'
       pairs: number
       home: number
       cached: number
@@ -75,7 +116,13 @@ export type FareSearchResult =
       capSkipped: number
       providerUnavailable: boolean
       aborted: boolean
+      /** True when the run's daily search / watch check was given back (it cost nothing). */
+      refunded: boolean
       status: TripData['status']
+      /** Destinations that got a new aggregate and snapshot. */
+      snapshots: number
+      /** Watch mode only. */
+      emails: WatchEmailReport | null
     }
 
 /** A traveler as the search sees them: validated airports and constraints. */
@@ -96,9 +143,10 @@ interface RouteGroup {
 
 export function parsePayload(raw: unknown): FareSearchPayload | null {
   if (typeof raw !== 'object' || raw === null) return null
-  const { tripId, mode } = raw as Record<string, unknown>
+  const { tripId, mode, countedOn } = raw as Record<string, unknown>
   if (typeof tripId !== 'string' || !tripId || (mode !== 'full' && mode !== 'watch')) return null
-  return { tripId, mode }
+  const day = typeof countedOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(countedOn) ? countedOn : undefined
+  return day ? { tripId, mode, countedOn: day } : { tripId, mode }
 }
 
 /** Deterministic row ids, so a retry overwrites instead of duplicating. */
@@ -111,30 +159,52 @@ export const snapshotRecordId = (tripId: string, iata: string, jobId: string) =>
 export const cacheRecordId = (key: string, fixture: boolean, tripId: string) =>
   fixture ? `fixture|${tripId}|${key}` : key
 
+/** Shown when a watch run's final attempt failed. */
+export const GENERIC_WATCH_ERROR_MESSAGE = 'The fare check didn’t finish. Try again later.'
+
+/** Why a watch run shouldn't start, or null when it may. */
+export function watchSkipReason(trip: Trip, now: Date, limits: Limits = LIMITS): FareSearchSkip | null {
+  if (trip.data.status !== 'results' && trip.data.status !== 'locked') return 'not_watchable'
+  if (!isWatchWindowOpen(trip.data.outboundDate, dateInZone(now), limits)) return 'watch_ended'
+  return null
+}
+
 export async function runFareSearch(job: Job, ctx: JobContext, deps: FareSearchDeps): Promise<FareSearchResult> {
   const payload = parsePayload(job.payload)
   if (!payload) return { skipped: 'bad_payload' }
-  // Watch mode (cron / "Check fares now") is a later phase.
-  if (payload.mode !== 'full') return { skipped: 'unsupported_mode' }
 
   const { tools } = deps
+  const now = deps.now ?? (() => new Date())
   const access = await loadTrip(tools, payload.tripId)
   if (!access.ok) return { skipped: 'trip_gone' }
   const trip = access.trip
-  // startSearch writes searchJobId right after enqueueing, so it may still be
-  // empty when we start; a different id means a newer search replaced this one.
-  if (trip.data.searchJobId && trip.data.searchJobId !== job.id) return { skipped: 'superseded' }
-  if (trip.data.status !== 'searching') return { skipped: 'not_searching' }
+
+  if (payload.mode === 'full') {
+    // startSearch writes searchJobId right after enqueueing, so it may still be
+    // empty when we start; a different id means a newer search replaced this one.
+    if (trip.data.searchJobId && trip.data.searchJobId !== job.id) return { skipped: 'superseded' }
+    if (trip.data.status !== 'searching') return { skipped: 'not_searching' }
+  } else {
+    // A full search started meanwhile (it re-checks everything), the trip
+    // went back to gathering, or departure is ≤ 1 day away: nothing to do.
+    const skip = watchSkipReason(trip, now(), deps.limits ?? LIMITS)
+    if (skip) {
+      must(await tools.update('trips', trip.id, { watchQueuedAt: null, watchError: null }), 'clear watch')
+      return { skipped: skip }
+    }
+  }
 
   try {
-    return await search(job, ctx, deps, trip)
+    return await search(job, ctx, deps, trip, payload)
   } catch (err) {
     const final = job.attempts >= job.maxAttempts
     console.error(
-      `[fare-search] trip ${trip.id} attempt ${job.attempts}/${job.maxAttempts} failed: ${err instanceof Error ? err.message : String(err)}`,
+      `[fare-search] ${payload.mode} trip ${trip.id} attempt ${job.attempts}/${job.maxAttempts} failed: ${err instanceof Error ? err.message : String(err)}`,
     )
     try {
-      if (final) await giveUp(tools, trip.id)
+      if (payload.mode === 'watch') {
+        if (final) must(await tools.update('trips', trip.id, { watchQueuedAt: null, watchError: GENERIC_WATCH_ERROR_MESSAGE }), 'record watch failure')
+      } else if (final) await giveUp(tools, trip.id)
       else await tools.update('trips', trip.id, { searchMessage: 'Something went wrong. Retrying…' })
     } catch (inner) {
       console.error(`[fare-search] trip ${trip.id} could not record the failure: ${String(inner)}`)
@@ -143,11 +213,18 @@ export async function runFareSearch(job: Job, ctx: JobContext, deps: FareSearchD
   }
 }
 
-async function search(job: Job, ctx: JobContext, deps: FareSearchDeps, trip: Trip): Promise<FareSearchResult> {
+async function search(
+  job: Job,
+  ctx: JobContext,
+  deps: FareSearchDeps,
+  trip: Trip,
+  payload: FareSearchPayload,
+): Promise<FareSearchResult> {
   const { tools, env } = deps
   const limits = deps.limits ?? LIMITS
   const now = deps.now ?? (() => new Date())
   const searchFlights = deps.searchFlights ?? defaultSearchFlights
+  const watch = payload.mode === 'watch'
   const tripId = trip.id
   const fixture = usesFixture(env, trip.data.name)
   const memberIds = [...trip.data.memberIds]
@@ -158,22 +235,46 @@ async function search(job: Job, ctx: JobContext, deps: FareSearchDeps, trip: Tri
   const travelers = travelerRows.map((r) => toSearchTraveler(r.data))
   const flyers = travelers.filter((t) => t.homes.length > 0)
   const candidateRows = must(await tools.query('candidates', { where: { tripId } }), 'query candidates').records
-  const candidates = [...candidateRows]
+  const allCandidates = [...candidateRows]
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.recordId.localeCompare(b.recordId))
-    .map((r) => ({ recordId: r.recordId, iata: String(r.data.iata) }))
+    .map((r) => ({
+      recordId: r.recordId,
+      iata: String(r.data.iata),
+      city: typeof r.data.city === 'string' && r.data.city ? r.data.city : String(r.data.iata),
+      groupTotal: typeof r.data.groupTotal === 'number' ? r.data.groupTotal : null,
+    }))
+
+  // Watch mode: only the shortlist, best first.
+  let candidates = allCandidates
+  if (watch) {
+    const votes = must(await tools.query('votes', { where: { tripId } }), 'query votes').records.map((r) => ({ candidateIata: r.data.candidateIata }))
+    const shortlist = selectShortlist(trip.data, allCandidates, votes, limits.watchShortlistSize)
+    candidates = shortlist.map((iata) => allCandidates.find((c) => c.iata === iata)!).filter(Boolean)
+    if (candidates.length === 0) {
+      must(await tools.update('trips', tripId, { watchQueuedAt: null, watchError: null }), 'clear watch')
+      return { skipped: 'nothing_to_watch' }
+    }
+  }
   const budgets = await readBudgets(tools, tripId, travelers)
 
   // Fare rows for travelers or candidates that are gone (or have no airports now) would mislead.
   const flyerIds = new Set(flyers.map((t) => t.id))
-  const candidateCodes = new Set(candidates.map((c) => c.iata))
+  const candidateCodes = new Set(allCandidates.map((c) => c.iata))
   const existingFares = must(await tools.query('fares', { where: { tripId } }), 'query fares').records
+  const previousFares: WatchFare[] = []
   for (const row of existingFares) {
     if (!flyerIds.has(String(row.data.travelerId)) || !candidateCodes.has(String(row.data.candidateIata))) {
       must(await tools.remove('fares', row.recordId), 'remove stale fare')
+    } else {
+      previousFares.push({
+        travelerId: String(row.data.travelerId),
+        candidateIata: String(row.data.candidateIata),
+        price: row.data.status === 'ok' && typeof row.data.price === 'number' ? row.data.price : null,
+      })
     }
   }
 
-  // Progress: ctx.progress every step, the trip row at most once per throttle window.
+  // Progress: ctx.progress every step; in full mode also the trip row, at most once per throttle window.
   const total = flyers.length * candidates.length
   let done = 0
   let lastWrite = 0
@@ -181,12 +282,18 @@ async function search(job: Job, ctx: JobContext, deps: FareSearchDeps, trip: Tri
     done += count
     const progress = total === 0 ? 0 : Math.min(0.99, done / total)
     ctx.progress(progress, message)
+    if (watch) return
     const t = Date.now()
     if (t - lastWrite >= limits.searchProgressThrottleMs) {
       lastWrite = t
       must(await tools.update('trips', tripId, { searchProgress: progress, searchMessage: message }), 'write progress')
     }
   }
+
+  /** Pairs answered in this run (fresh, cached or home), `${travelerId}|${iata}`. */
+  const answered = new Set<string>()
+  /** Watch mode: destinations with at least one pair this run couldn't answer. */
+  const unansweredIatas = new Set<string>()
 
   async function writeFare(travelerId: string, iata: string, fare: FareResult | null, fetchedAt: string) {
     must(
@@ -197,6 +304,7 @@ async function search(job: Job, ctx: JobContext, deps: FareSearchDeps, trip: Tri
       ),
       'write fare',
     )
+    if (fare) answered.add(fareMapKey(travelerId, iata))
   }
 
   // 2. Pairs: home pairs now (no call); the rest grouped by route.
@@ -229,12 +337,21 @@ async function search(job: Job, ctx: JobContext, deps: FareSearchDeps, trip: Tri
       await writeFare(t.id, group.search.candidateIata, chooseFare(options, t.constraints), fetchedAt)
     }
   }
-  async function markError(group: RouteGroup) {
+  /**
+   * A route with no answer. Full mode: mark it 'error' so the card says who's
+   * missing. Watch mode: keep the previous fare and leave that destination's
+   * aggregate and snapshot alone.
+   */
+  async function markUnanswered(group: RouteGroup) {
+    if (watch) {
+      unansweredIatas.add(group.search.candidateIata)
+      return
+    }
     for (const t of group.travelers) await writeFare(t.id, group.search.candidateIata, null, now().toISOString())
   }
   const label = (g: RouteGroup) => `Checked ${g.request.departure_id}→${g.request.arrival_id}`
 
-  // 3. Cache (full mode): reuse routes fetched < 6h ago.
+  // 3. Cache: reuse routes fetched < 6h ago.
   let cached = 0
   const needed: RouteGroup[] = []
   for (const group of groups.values()) {
@@ -267,6 +384,8 @@ async function search(job: Job, ctx: JobContext, deps: FareSearchDeps, trip: Tri
 
   let calls = 0
   let errors = 0
+  let liveSuccesses = 0
+  let billedErrors = 0
   let providerUnavailable = false
   let next = 0
   const finished = new Set<RouteGroup>()
@@ -297,7 +416,10 @@ async function search(job: Job, ctx: JobContext, deps: FareSearchDeps, trip: Tri
       }
       const res = answer.result
       if (res.success) {
-        if (answer.source === 'live') countCall()
+        if (answer.source === 'live') {
+          countCall()
+          liveSuccesses++
+        }
         const options = extractFlightOptions(res.data, group.search)
         const fetchedAt = now().toISOString()
         await writeCache(tools, cacheRecordId(group.key, answer.source === 'fixture', tripId), group.key, options, fetchedAt)
@@ -311,10 +433,13 @@ async function search(job: Job, ctx: JobContext, deps: FareSearchDeps, trip: Tri
           calls--
         } else {
           // We can't know a failed call wasn't billed, so it counts.
-          if (answer.source === 'live') countCall()
+          if (answer.source === 'live') {
+            countCall()
+            billedErrors++
+          }
           errors++
         }
-        await markError(group)
+        await markUnanswered(group)
       }
       finished.add(group)
       await step(group.travelers.length, label(group))
@@ -324,17 +449,21 @@ async function search(job: Job, ctx: JobContext, deps: FareSearchDeps, trip: Tri
   await ledger
   if (failure) throw failure
 
-  // Everything not answered (cap, provider down, cancelled) is marked so the
-  // card says which fares are missing instead of showing an old price.
+  // Everything not answered (cap, provider down, cancelled).
   const unanswered = [...plan.skipped, ...plan.run.filter((g) => !finished.has(g))]
-  for (const group of unanswered) await markError(group)
+  for (const group of unanswered) await markUnanswered(group)
   const capSkipped = providerUnavailable || ctx.signal.aborted ? 0 : unanswered.length
 
-  // 6. Aggregate every candidate with ranking.ts (budgets stay server-side).
+  // 6. Aggregate with ranking.ts (budgets stay server-side) and snapshot.
   const fares = must(await tools.query('fares', { where: { tripId } }), 'query fares').records
   const rankTravelers: RankTraveler[] = travelers.map((t) => ({ id: t.id, displayName: t.displayName }))
   const checkedAt = now().toISOString()
+  const drops: DestinationDrop[] = []
+  let snapshots = 0
   for (const candidate of candidates) {
+    if (watch && unansweredIatas.has(candidate.iata)) continue
+    const ownSnapshotId = snapshotRecordId(tripId, candidate.iata, job.id)
+    const previous = watch ? await latestSnapshot(tools, tripId, candidate.iata, ownSnapshotId) : null
     const rankFares: RankFare[] = fares
       .filter((f) => f.data.candidateIata === candidate.iata)
       .map((f) => ({
@@ -362,42 +491,143 @@ async function search(job: Job, ctx: JobContext, deps: FareSearchDeps, trip: Tri
       await tools.create(
         'fareSnapshots',
         { tripId, memberIds, candidateIata: candidate.iata, groupTotal: agg.groupTotal, maxFare: agg.maxFare, checkedAt },
-        snapshotRecordId(tripId, candidate.iata, job.id),
+        ownSnapshotId,
       ),
       'write snapshot',
     )
+    snapshots++
+    if (watch) {
+      const drop = detectGroupDrop(previous, { groupTotal: agg.groupTotal })
+      if (drop) drops.push({ iata: candidate.iata, city: candidate.city, drop })
+    }
   }
 
-  // 8. Finish. Someone may have joined mid-run: give them the rows we wrote.
+  // 7. Someone may have joined mid-run: give them the rows we wrote.
   const fresh = await loadTrip(tools, tripId)
   if (fresh.ok && !sameIds(fresh.trip.data.memberIds, memberIds)) {
     await propagateMemberIds(tools, tripId, fresh.trip.data.memberIds)
   }
-  const hasResults = fares.some((f) => f.data.status === 'ok' && !(f.data.originIata === f.data.candidateIata && f.data.price === 0))
-  const status: TripData['status'] =
-    fresh.ok && fresh.trip.data.status === 'locked' ? 'locked' : providerUnavailable && !hasResults ? 'gathering' : 'results'
+  const current = fresh.ok ? fresh.trip : trip
+
+  // Watch alerts: group drops, and private first crossings under a budget
+  // (only for fares this run actually answered).
+  let emails: WatchEmailReport | null = null
+  if (watch) {
+    const fareRows = new Map<string, FareRow>()
+    const currentFares: WatchFare[] = []
+    for (const f of fares) {
+      const key = fareMapKey(String(f.data.travelerId), String(f.data.candidateIata))
+      fareRows.set(key, f.data as unknown as FareRow)
+      if (!answered.has(key)) continue
+      currentFares.push({
+        travelerId: String(f.data.travelerId),
+        candidateIata: String(f.data.candidateIata),
+        price: f.data.status === 'ok' && typeof f.data.price === 'number' ? f.data.price : null,
+      })
+    }
+    const shortlisted = new Set(candidates.filter((c) => !unansweredIatas.has(c.iata)).map((c) => c.iata))
+    const crossings = findBudgetCrossings(
+      previousFares.filter((f) => shortlisted.has(f.candidateIata)),
+      currentFares.filter((f) => shortlisted.has(f.candidateIata)),
+      budgets,
+    )
+    emails = await sendWatchEmails(
+      tools,
+      { ALLOW_DEBUG_ROUTES: env.ALLOW_DEBUG_ROUTES, APP_NAME: env.APP_NAME ?? '' },
+      current,
+      { jobId: job.id, drops, crossings, fares: fareRows, cities: new Map(allCandidates.map((c) => [c.iata, c.city])) },
+      { now, limits, send: deps.sendEmail },
+    )
+  }
+
+  // A run that ended on provider_unavailable without a single successful or
+  // billed call cost nothing: give back the daily search / watch check.
+  const refunded = refundsDailyCount({ providerUnavailable, liveSuccesses, billedErrors })
+    ? await refundDailyCount(tools, payload, day)
+    : false
+
+  // 8. Finish.
   const aborted = ctx.signal.aborted
-  const searchError = providerUnavailable
+  const routesNote = (n: number) =>
+    `Halfway reached its fare-check limit, so ${n} ${n === 1 ? 'route wasn’t' : 'routes weren’t'} checked. Try again tomorrow.`
+  const problem = providerUnavailable
     ? PROVIDER_UNAVAILABLE_MESSAGE
     : aborted
-      ? 'The fare search was stopped before it finished.'
+      ? watch
+        ? 'The fare check was stopped before it finished.'
+        : 'The fare search was stopped before it finished.'
       : capSkipped > 0
-        ? `Halfway reached its fare-check limit, so ${capSkipped} ${capSkipped === 1 ? 'route wasn’t' : 'routes weren’t'} checked. Try again tomorrow.`
+        ? routesNote(capSkipped)
         : errors > 0
           ? 'Some fares couldn’t be checked. Try again later.'
           : null
+
+  if (watch) {
+    must(await tools.update('trips', tripId, { watchQueuedAt: null, watchError: problem }), 'finish watch')
+    ctx.progress(1, 'Done')
+    return {
+      mode: 'watch',
+      pairs: total,
+      home,
+      cached,
+      calls,
+      errors,
+      capSkipped,
+      providerUnavailable,
+      aborted,
+      refunded,
+      status: current.data.status,
+      snapshots,
+      emails,
+    }
+  }
+
+  const hasResults = fares.some((f) => f.data.status === 'ok' && !(f.data.originIata === f.data.candidateIata && f.data.price === 0))
+  const status: TripData['status'] =
+    current.data.status === 'locked' ? 'locked' : providerUnavailable && !hasResults ? 'gathering' : 'results'
   must(
     await tools.update('trips', tripId, {
       status,
       lastSearchAt: checkedAt,
       searchProgress: 1,
       searchMessage: `Checked fares for ${candidates.length} ${candidates.length === 1 ? 'destination' : 'destinations'}`,
-      searchError,
+      searchError: problem,
     }),
     'finish search',
   )
   ctx.progress(1, 'Done')
-  return { pairs: total, home, cached, calls, errors, capSkipped, providerUnavailable, aborted, status }
+  return { mode: 'full', pairs: total, home, cached, calls, errors, capSkipped, providerUnavailable, aborted, refunded, status, snapshots, emails }
+}
+
+/** The newest snapshot for a destination, ignoring this run's own (a retry may have written it). */
+async function latestSnapshot(
+  tools: ActionTools,
+  tripId: string,
+  iata: string,
+  excludeRecordId: string,
+): Promise<{ groupTotal: number | null } | null> {
+  const { records } = must(await tools.query('fareSnapshots', { where: { tripId, candidateIata: iata } }), 'query snapshots')
+  let best: { checkedAt: string; groupTotal: number | null } | null = null
+  for (const r of records) {
+    if (r.recordId === excludeRecordId) continue
+    const checkedAt = String(r.data.checkedAt ?? '')
+    if (!best || checkedAt > best.checkedAt) {
+      best = { checkedAt, groupTotal: typeof r.data.groupTotal === 'number' ? r.data.groupTotal : null }
+    }
+  }
+  return best
+}
+
+/**
+ * Give back the run's daily count: the trip's full search, or its watch
+ * check. Never below zero. The cron's once-a-day marker is kept.
+ */
+async function refundDailyCount(tools: ActionTools, payload: FareSearchPayload, today: string): Promise<boolean> {
+  const day = payload.countedOn ?? today
+  const key = payload.mode === 'full' ? usageKeys.fullSearchTrip(payload.tripId) : usageKeys.watchTrip(payload.tripId)
+  if ((await getUsageCount(tools, day, key)) <= 0) return false
+  await incrementUsage(tools, day, key, -1)
+  return true
 }
 
 /** Final attempt failed: leave 'searching' so the trip isn't stuck, with a generic message. */
