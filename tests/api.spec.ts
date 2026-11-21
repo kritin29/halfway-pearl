@@ -138,6 +138,8 @@ const ACTIONS = [
   'removeCandidate',
   'addMidpointHubs',
   'suggestCandidates',
+  'startSearch',
+  'toggleVote',
   '__testLockTrip',
 ]
 
@@ -239,7 +241,7 @@ test.describe('trip actions across two accounts', () => {
 /**
  * The ONE real AI call per test run (CLAUDE.md: at most one real call per
  * integration endpoint per run). suggestCandidates → anthropic/chat-completion
- * with claude-haiku-5-5 / max_tokens 2048. Asserts our envelope and the
+ * with claude-haiku-5-5 / max_tokens 3000. Asserts our envelope and the
  * validated rows, not the model's exact words. The trip is `__test-`, so the
  * 5/day AI cap doesn't lock the pool account out after a few local runs
  * (exempt only when ALLOW_DEBUG_ROUTES === 'true'; unit-tested).

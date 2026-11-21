@@ -61,7 +61,7 @@ export async function openApp(user: MultiplayerUser): Promise<void> {
 export async function asClient(
   user: MultiplayerUser,
   baseURL: string,
-  tool: 'records_query' | 'records_create',
+  tool: 'records_query' | 'records_create' | 'records_update',
   input: Record<string, unknown>,
 ): Promise<{ status: number; body: { ok: boolean; result?: { success: boolean; data?: { records?: Array<{ recordId: string; data: Record<string, unknown> }> } }; error?: string } }> {
   const token = await bearerFor(user, baseURL)
