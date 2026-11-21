@@ -13,3 +13,32 @@ export function airportByIata(code: string): Airport | undefined {
 export function isKnownIata(code: string): boolean {
   return BY_IATA.has(code)
 }
+
+/**
+ * Autocomplete: exact code first, then codes starting with the query, then
+ * city/name/country matches. Major hubs break ties. `exclude` hides codes
+ * already picked.
+ */
+export function searchAirports(
+  query: string,
+  exclude: readonly string[] = [],
+  limit = 6,
+  airports: readonly Airport[] = AIRPORTS,
+): Airport[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return []
+  const scored: Array<{ a: Airport; score: number }> = []
+  for (const a of airports) {
+    if (exclude.includes(a.iata)) continue
+    const code = a.iata.toLowerCase()
+    let score = -1
+    if (code === q) score = 0
+    else if (code.startsWith(q)) score = 1
+    else if (a.city.toLowerCase().startsWith(q)) score = 2
+    else if (a.city.toLowerCase().includes(q) || a.country.toLowerCase().startsWith(q)) score = 3
+    else if (q.length >= 3 && (a as Airport & { name?: string }).name?.toLowerCase().includes(q)) score = 4
+    if (score >= 0) scored.push({ a, score: score * 2 + (a.major ? 0 : 1) })
+  }
+  scored.sort((x, y) => x.score - y.score || x.a.iata.localeCompare(y.a.iata))
+  return scored.slice(0, limit).map((s) => s.a)
+}

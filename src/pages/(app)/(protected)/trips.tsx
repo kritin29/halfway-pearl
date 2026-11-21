@@ -1,0 +1,190 @@
+/**
+ * /trips — the trips I'm on, plus "Start a trip" (SPEC §10).
+ * The list is a plain `useQuery('trips')`: RBAC (`read: 'collaborator'`)
+ * already limits it to trips whose memberIds include me.
+ */
+import { useState, type FormEvent } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { useAuth, useMutations, useQuery } from 'deepspace'
+import { CalendarDays, ChevronRight, Users } from 'lucide-react'
+import { Badge, Button, Input, Label, Textarea } from '@/components/ui'
+import { EmptyNote, ErrorState, LoadingState, Retryable } from '@/components/AsyncState'
+import { useAction } from '@/hooks/useAction'
+import { isRetryable } from '@/lib/actions-client'
+import { usageDay } from '@/lib/caps'
+import { dateRange, localToday } from '@/lib/format'
+import { INPUT_LIMITS } from '@/lib/limits'
+import { parseIdList, type TripData } from '@/lib/types'
+import { text, tripDates } from '@/lib/validate'
+import { StatusBadge } from '@/components/trip/StatusBadge'
+
+export default function TripsPage() {
+  return (
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-6 sm:px-6">
+      <header>
+        <h1 className="text-2xl font-semibold tracking-tight">Your trips</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Find the best place to meet, with everyone entering their own airports and a private budget.
+        </p>
+      </header>
+      <CreateTripForm />
+      <Retryable>{(retry) => <MyTrips onRetry={retry} />}</Retryable>
+    </div>
+  )
+}
+
+function MyTrips({ onRetry }: { onRetry: () => void }) {
+  const { userId } = useAuth()
+  const { records, status, error } = useQuery<TripData>('trips', { limit: 100 })
+
+  if (status === 'loading') return <LoadingState label="Loading your trips…" />
+  if (status === 'error') {
+    return <ErrorState title="Could not load your trips" message={error} onRetry={onRetry} />
+  }
+  if (records.length === 0) {
+    return (
+      <EmptyNote title="No trips yet">
+        Start one above, or open an invite link a friend sent you.
+      </EmptyNote>
+    )
+  }
+
+  const sorted = [...records].sort((a, b) => a.data.outboundDate.localeCompare(b.data.outboundDate))
+  return (
+    <section aria-labelledby="my-trips-heading">
+      <h2 id="my-trips-heading" className="mb-3 text-lg font-semibold">
+        Trips you're on
+      </h2>
+      <ul className="flex flex-col gap-3" data-testid="trip-list">
+        {sorted.map((trip) => (
+          <li key={trip.recordId}>
+            <Link
+              to={`/t/${trip.recordId}`}
+              data-testid="trip-card"
+              className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-accent"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="truncate font-medium text-foreground">{trip.data.name}</span>
+                  <StatusBadge status={trip.data.status} />
+                  {trip.data.organizerId === userId && <Badge variant="outline">Organizer</Badge>}
+                </div>
+                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                  <span className="inline-flex items-center gap-1">
+                    <CalendarDays className="h-3.5 w-3.5" aria-hidden />
+                    {dateRange(trip.data.outboundDate, trip.data.returnDate)}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Users className="h-3.5 w-3.5" aria-hidden />
+                    {memberCount(trip.data.memberIds)}
+                  </span>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+function CreateTripForm() {
+  const navigate = useNavigate()
+  // Gate on the trips room: the trip page we navigate to reads from it.
+  const { ready } = useMutations('trips')
+  const create = useAction<{ tripId: string; inviteCode: string }>('createTrip')
+  const [name, setName] = useState('')
+  const [outboundDate, setOutboundDate] = useState('')
+  const [returnDate, setReturnDate] = useState('')
+  const [vibe, setVibe] = useState('')
+  const [formError, setFormError] = useState<string | null>(null)
+
+  async function submit(e?: FormEvent) {
+    e?.preventDefault()
+    setFormError(null)
+    // Same checks as the server, so most mistakes never leave the browser.
+    const n = text(name, 'Trip name', { max: INPUT_LIMITS.tripNameMax })
+    if (!n.ok) return setFormError(n.error)
+    const d = tripDates(outboundDate, returnDate, usageDay(new Date()))
+    if (!d.ok) return setFormError(d.error)
+    const v = text(vibe, 'Vibe', { max: INPUT_LIMITS.vibeMax, optional: true })
+    if (!v.ok) return setFormError(v.error)
+
+    // Confirmed write: navigate only once the server has created the trip.
+    const res = await create.run({ name: n.value, ...d.value, vibe: v.value })
+    if (res?.success) navigate(`/t/${res.data.tripId}`)
+  }
+
+  const error = formError ?? create.error?.message ?? null
+  return (
+    <section aria-labelledby="create-trip-heading" className="rounded-lg border border-border bg-card p-4 sm:p-6">
+      <h2 id="create-trip-heading" className="text-lg font-semibold">
+        Start a trip
+      </h2>
+      <form className="mt-4 flex flex-col gap-4" onSubmit={submit} noValidate data-testid="create-trip-form">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="trip-name">Trip name</Label>
+          <Input
+            id="trip-name"
+            value={name}
+            maxLength={INPUT_LIMITS.tripNameMax}
+            placeholder="Spring reunion"
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="trip-outbound">Outbound date</Label>
+            <Input
+              id="trip-outbound"
+              type="date"
+              min={localToday()}
+              value={outboundDate}
+              onChange={(e) => setOutboundDate(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="trip-return">Return date</Label>
+            <Input
+              id="trip-return"
+              type="date"
+              min={outboundDate || localToday()}
+              value={returnDate}
+              onChange={(e) => setReturnDate(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="trip-vibe">
+            Vibe <span className="font-normal text-muted-foreground">(optional)</span>
+          </Label>
+          <Textarea
+            id="trip-vibe"
+            rows={2}
+            value={vibe}
+            maxLength={INPUT_LIMITS.vibeMax}
+            placeholder="beach, cheap, not Florida"
+            onChange={(e) => setVibe(e.target.value)}
+          />
+        </div>
+        {error && (
+          <ErrorState
+            testId="create-trip-error"
+            title="Could not create the trip"
+            message={error}
+            onRetry={create.error && isRetryable(create.error.code) ? () => void submit() : undefined}
+          />
+        )}
+        <Button type="submit" loading={create.pending} disabled={!ready || create.pending} className="sm:w-fit">
+          {ready ? 'Create trip' : 'Connecting…'}
+        </Button>
+      </form>
+    </section>
+  )
+}
+
+function memberCount(raw: unknown): string {
+  const n = parseIdList(raw).length
+  return `${n} ${n === 1 ? 'member' : 'members'}`
+}

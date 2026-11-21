@@ -10,7 +10,7 @@
  */
 import type { ActionHandler, ActionResult, ActionTools } from 'deepspace/worker'
 import { RECORD_NOT_FOUND } from 'deepspace/worker'
-import type { TripData } from '../lib/types'
+import { parseIdList, type TripData } from '../lib/types'
 import { asParams } from '../lib/validate'
 
 export type ErrorCode =
@@ -52,18 +52,7 @@ export function isDuplicate(result: ActionResult<unknown>): boolean {
   return !result.success && result.error.startsWith('Duplicate:')
 }
 
-/** json columns arrive parsed, but accept a JSON string too (the runtime does). */
-export function parseIdList(raw: unknown): string[] {
-  let value = raw
-  if (typeof value === 'string') {
-    try {
-      value = JSON.parse(value)
-    } catch {
-      return []
-    }
-  }
-  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []
-}
+export { parseIdList }
 
 export interface Trip {
   id: string

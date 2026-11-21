@@ -50,3 +50,16 @@ export const GHOST_PREFIX = 'ghost:'
 export function isGhostId(id: string): boolean {
   return id.startsWith(GHOST_PREFIX)
 }
+
+/** json columns arrive parsed, but accept a JSON string too (the runtime does). Strings only. */
+export function parseIdList(raw: unknown): string[] {
+  let value = raw
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value)
+    } catch {
+      return []
+    }
+  }
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []
+}
