@@ -158,27 +158,51 @@ export interface Itinerary {
   overnight: boolean
 }
 
+/** Everything one SerpApi response says about a route, before any traveler's constraints. */
+export interface FlightOptions {
+  itineraries: Itinerary[]
+  priceLevel: PriceLevel
+  typicalLow: number | null
+  typicalHigh: number | null
+  bookingUrl: string
+}
+
 /**
- * Pick the fare for one traveler × candidate from a raw SerpApi response.
- *
- * 1. Merge best_flights + other_flights; skip malformed itineraries.
- * 2. Apply constraints: stops ≤ maxStops (2 = any), drop red-eyes when
- *    noRedeye, drop departures before earliestDepartHour.
- * 3. Cheapest remaining wins (ties: shorter, fewer stops, earlier departure).
- *    None remain but valid itineraries existed → 'filtered_out'; none → 'no_results'.
- * 4. Copy price_insights level and typical range when present.
+ * Parse a raw SerpApi response into flight options: best_flights +
+ * other_flights merged, malformed itineraries skipped, price insights and the
+ * booking link copied. No constraints applied, so the result can be cached
+ * per route and shared by every traveler flying it (SPEC §8.2, §8.4).
  */
-export function parseFlights(raw: unknown, constraints: FlightConstraints, search: FlightSearch): FareResult {
+export function extractFlightOptions(raw: unknown, search: FlightSearch): FlightOptions {
   const body = unwrap(raw)
-  const context: PriceContext = {
+  return {
+    itineraries: [...asArray(body?.best_flights), ...asArray(body?.other_flights)]
+      .map(parseItinerary)
+      .filter((it): it is Itinerary => it !== null),
     ...priceInsights(body),
     bookingUrl: googleFlightsUrl(search, searchMetadataUrl(body)),
   }
+}
 
-  const itineraries = [...asArray(body?.best_flights), ...asArray(body?.other_flights)]
-    .map(parseItinerary)
-    .filter((it): it is Itinerary => it !== null)
-
+/**
+ * Pick one traveler's fare from a route's options.
+ *
+ * 1. Apply constraints: stops ≤ maxStops (2 = any), drop red-eyes when
+ *    noRedeye, drop departures before earliestDepartHour.
+ * 2. Cheapest remaining wins (ties: shorter, fewer stops, earlier departure).
+ *    None remain but valid itineraries existed → 'filtered_out'; none → 'no_results'.
+ * 3. Price level and typical range come from the route's price insights.
+ *
+ * Tolerates options read back from storage (malformed entries are skipped).
+ */
+export function chooseFare(options: FlightOptions, constraints: FlightConstraints): FareResult {
+  const context: PriceContext = {
+    priceLevel: options.priceLevel,
+    typicalLow: options.typicalLow,
+    typicalHigh: options.typicalHigh,
+    bookingUrl: options.bookingUrl,
+  }
+  const itineraries = asArray(options.itineraries).filter(isItinerary)
   if (itineraries.length === 0) return { status: 'no_results', ...context }
 
   const allowed = itineraries.filter((it) => passesConstraints(it, constraints))
@@ -204,6 +228,30 @@ export function parseFlights(raw: unknown, constraints: FlightConstraints, searc
     home: false,
     ...context,
   }
+}
+
+/** Pick the fare for one traveler × candidate from a raw SerpApi response (extract + choose). */
+export function parseFlights(raw: unknown, constraints: FlightConstraints, search: FlightSearch): FareResult {
+  return chooseFare(extractFlightOptions(raw, search), constraints)
+}
+
+/** Shape check for itineraries read back from the cache. */
+function isItinerary(v: unknown): v is Itinerary {
+  if (!isRecord(v)) return false
+  return (
+    typeof v.price === 'number' &&
+    Number.isFinite(v.price) &&
+    v.price > 0 &&
+    typeof v.originIata === 'string' &&
+    typeof v.stops === 'number' &&
+    typeof v.durationMin === 'number' &&
+    typeof v.departLocal === 'string' &&
+    LOCAL_TIME_RE.test(v.departLocal) &&
+    typeof v.arriveLocal === 'string' &&
+    LOCAL_TIME_RE.test(v.arriveLocal) &&
+    typeof v.airline === 'string' &&
+    typeof v.overnight === 'boolean'
+  )
 }
 
 export function passesConstraints(it: Itinerary, c: FlightConstraints): boolean {
@@ -254,8 +302,9 @@ export interface ProviderFailure {
   detail: string
 }
 
+/** Shown as the Results banner (wording from the developer, Phase 5). */
 export const PROVIDER_UNAVAILABLE_MESSAGE =
-  'Live flight prices are temporarily unavailable from our data provider. This did not count against your daily search limit. Please try again later.'
+  'Flight prices are temporarily unavailable from our data provider. Try again later.'
 
 export const GENERIC_SEARCH_ERROR_MESSAGE = 'Something went wrong while checking fares. Please try again.'
 

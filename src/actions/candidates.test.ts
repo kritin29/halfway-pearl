@@ -320,7 +320,7 @@ describe('suggestCandidates (organizer, one AI call)', () => {
     return trip
   }
 
-  it('calls Haiku with the 2048-token budget, adds only valid new codes as source ai, counts one call', async () => {
+  it('calls Haiku with the 3000-token budget, adds only valid new codes as source ai, counts one call', async () => {
     const { tripId } = await ready()
     store.onIntegration(() => reply(SUGGESTIONS))
     const res = data<{ added: unknown[]; dropped: number; debug?: unknown }>(
@@ -346,7 +346,7 @@ describe('suggestCandidates (organizer, one AI call)', () => {
     expect(endpoint).toBe('anthropic/chat-completion')
     expect(body).toMatchObject({ model: AI_MODEL, max_tokens: AI_MAX_TOKENS })
     expect(AI_MODEL).toBe('claude-haiku-5-5')
-    expect(AI_MAX_TOKENS).toBe(2048)
+    expect(AI_MAX_TOKENS).toBe(3000)
     expect(Object.keys(body).sort()).toEqual(['max_tokens', 'messages', 'model', 'system'])
     const user = (body.messages as Array<{ role: string; content: string }>)[0]
     expect(user.role).toBe('user')

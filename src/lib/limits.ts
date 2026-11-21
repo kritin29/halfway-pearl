@@ -41,6 +41,14 @@ export const LIMITS = {
   maxWatchTripsPerCronRun: 10,
   /** Max trips one user may create per day (UTC). Abuse cap; creating a trip costs nothing. */
   maxTripsCreatedPerUserPerDay: 10,
+  /** At most one progress write to the trip row per this many ms while a search runs. */
+  searchProgressThrottleMs: 1000,
+  /**
+   * A trip still 'searching' with no trip-row write for this long is treated
+   * as stuck (e.g. the job's isolate died; JobRoom gives up after 16 min), so
+   * the organizer may start again.
+   */
+  staleSearchMs: 20 * 60 * 1000,
 } as const
 
 /** Input validation limits for action params (SPEC §5, §6). */
@@ -79,7 +87,7 @@ export const AI_MODEL = 'claude-haiku-5-5'
 /**
  * Output budget, reasoning included. Haiku 5.5 thinks by default and the
  * endpoint can't turn that off; at 600 the reasoning used the whole budget
- * before any answer (Phase 4 real call, NOTES Q1). 2048 leaves room for both;
- * worst case ≈ $0.001 per call at $0.50/M output tokens.
+ * before any answer (Phase 4 real call, NOTES Q1). The successful call used
+ * 974 of 2048; the developer raised it to 3000 for headroom (Phase 5 ruling).
  */
-export const AI_MAX_TOKENS = 2048
+export const AI_MAX_TOKENS = 3000

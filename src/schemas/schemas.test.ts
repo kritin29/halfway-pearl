@@ -21,6 +21,7 @@ import { faresSchema } from './fares-schema'
 import { travelersSchema, TRAVELER_WRITABLE_FIELDS } from './travelers-schema'
 import { tripsSchema } from './trips-schema'
 import { usageSchema } from './usage-schema'
+import { fareCacheSchema } from './fare-cache-schema'
 import { usersSchema } from './users-schema'
 import { votesSchema } from './votes-schema'
 
@@ -41,6 +42,7 @@ describe('schema set', () => {
       [
         'budgets',
         'candidates',
+        'fareCache',
         'fareSnapshots',
         'fares',
         'settings',
@@ -139,6 +141,23 @@ describe('usage (server-only ledger)', () => {
   it('lists all four roles explicitly', () => {
     expect(Object.keys(usageSchema.permissions).sort()).toEqual(['*', 'admin', 'member', 'viewer'])
     expect(usageSchema.uniqueOn).toEqual(['day', 'key'])
+  })
+})
+
+describe('fareCache (server-only, written by the fare-search job)', () => {
+  const row = rec({ key: 'ORD|BNA|2026-12-11|2026-12-13', itineraries: [], fetchedAt: '2026-11-21T00:00:00Z' })
+
+  it('is unreadable and unwritable by every role, admin included', () => {
+    for (const role of [...ROLES, 'some-new-role']) {
+      for (const userId of [ALICE, OUTSIDER]) {
+        expect(canRead(fareCacheSchema, role, row, userId), `${role} read`).toBe(false)
+        expect(canUpdate(fareCacheSchema, role, row, userId), `${role} update`).toBe(false)
+        expect(canDelete(fareCacheSchema, role, row, userId), `${role} delete`).toBe(false)
+      }
+      expect(canCreate(fareCacheSchema, role), `${role} create`).toBe(false)
+    }
+    expect(Object.keys(fareCacheSchema.permissions).sort()).toEqual(['*', 'admin', 'member', 'viewer'])
+    expect(fareCacheSchema.uniqueOn).toEqual(['key'])
   })
 })
 
