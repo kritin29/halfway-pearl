@@ -75,3 +75,35 @@ Format:
 - SPEC detail I chose: after `provider_unavailable`, status goes back to `results` if earlier results exist, else `gathering`.
 **I verified myself (how):**
 - …
+
+---
+
+## Phase 3a — Security foundations, data model, trip actions — Sat Nov 21
+**Agent (Claude Code) did:**
+- `createAppTools` moved to `src/server/app-tools.ts`, used by `action-routes.ts` (no behaviour change).
+- `serpapi`/`anthropic`/`email` marked `serverOnly`; the browser integration proxy returns 403 for them (signed in or not).
+- JobRoom read/write admin-only; `/ws/cron` and `/ws/jobs` 404 unless the id is `app:${DEEPSPACE_APP_ID}`; cron gives non-admins `viewer`.
+- Schemas for trips, travelers, budgets, candidates, fares, votes, fareSnapshots, usage, registered; users `roster: 'read-policy'`. `src/schemas/schemas.test.ts`: permission matrix through the SDK's `canRead/canCreate/canUpdate/canDelete/checkFieldPermissions`, plus `lintSchemas` = [] (with a control proving lint does warn on a bad schema).
+- `src/lib/validate.ts`, `src/lib/airports.ts`, `src/server/{trip-access,trip-rows,usage}.ts`, and an in-memory `ActionTools` fake (`src/server/testing/fake-tools.ts`) that mirrors the RecordRoom write rules (userBound, defaults, required, immutable, uniqueOn, upsert, not-found).
+- Actions `createTrip`, `joinTrip`, `addGhost`, `updateGhost`, `removeGhost`, wrapped by `defineAction` (non-object params → `invalid_params`; thrown errors → generic `server_error`, details logged without params). A non-JSON body now gets 400 instead of 500.
+- Tests: unit 11 files / 185 pass; smoke+api 22 pass; e2e 25 pass; tsc and eslint clean.
+- Mutation checks (each made a test fail, then restored): budgets `read: true`; members given cron/job write; `addGhost` without the organizer check; `joinTrip` without the capacity check.
+**What broke / surprised me:**
+- My first "member can't write cron/jobs" test passed even with members given write access: Alice had no `users` row locally, so she resolved as `viewer`. Fixed by opening `/home` first (NOTES G4).
+- The room itself 404s a non-upgrade GET (`Not Found` vs the route's `Not found`), so the room-pinning tests use real browser WebSockets instead.
+- An equivalent mutation (`'own'` → `'collaborator'` on budgets, which has no collaboratorsField) didn't fail any test, which is correct; switched to `read: true`.
+- I committed the schemas without `limits.ts`/`types.ts` they import; amended that local, unpushed commit.
+**Decisions & tradeoffs (please confirm):**
+- `memberIds` is derived from the trip's real traveler rows + organizer (each insert is atomic under `uniqueOn`), then propagated; `syncTripMembers` re-reads and repeats (≤ 3 rounds) so two people joining at once converge. Last-seat race: the newer row (by createdAt, then id) backs out with `trip_full`.
+- A non-member gets `not_found` for a trip that exists (same as a missing trip), so trip ids can't be probed. A member who isn't the organizer gets `forbidden`.
+- Joining is allowed in any trip status (including locked). Ghost edits are allowed in any status.
+- No per-user trip-creation cap: `limits.ts` has none and createTrip spends nothing. Unbounded trip creation is possible (abuse, not spend).
+- Trip dates: outbound today..+330 days (UTC), trip ≤ 30 days (`INPUT_LIMITS` in `limits.ts`).
+- Display names are copied from the caller's own `users.name` only (never email), falling back to "Traveler".
+- The integration 403 tests send `{}` bodies, which the upstream rejects as invalid, so even a broken guard can't bill a search or send an email.
+**Unsure about:**
+- The fake tools follow my reading of `putRecord`, not the real DO; the HTTP tests cover the real path for create/join/ghosts, but not `deleteWhere` on fares with real rows.
+- The last-seat race guard and the concurrent-join convergence are reasoned, not tested against the real room under concurrency.
+- api tests now need pool accounts (they skip with a message if there are fewer than 2).
+**I verified myself (how):**
+- …

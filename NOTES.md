@@ -318,3 +318,13 @@ Rejected alternative: a separate `ghosts` collection. It doubles the queries, ra
 
 ## Resolution (2026-11-20)
 The developer approved all five decisions: C4 serverOnly + 403 with api tests; the C12 seam with a real-path unit test; C3 JobRoom admin-only + trip-row progress; the SPEC updates, plus C7 and the `createAppTools` refactor, with the createdBy/leave-trip side effect recorded as a known limitation; and one real `serpapi/flights` call deferred to Phase 2 (ORD,MDW → BNA, 2026-12-11 → 2026-12-13). SPEC.md is updated and its Changelog maps each change back to the items above.
+
+---
+
+## Phase 3a findings (2026-11-21)
+No conflicts with SPEC.md. Gaps found while building, for later phases:
+- **G1 Client-written traveler constraints aren't validated by the room.** `writableFields` limits *which* columns a client writes, not their values: a member can store 20 bogus `homeAirports` or `maxStops: 99` on their own row. The fare-search job (Phase 5) must re-validate with `src/lib/validate.ts` (`homeAirports`, `maxStops`, `departHour`) and skip or clamp bad rows.
+- **G2 `budgets.maxUsd` > 0 isn't enforced** (client-written too). Server code reading budgets must ignore non-positive / non-finite values, as well as userIds that aren't travelers (SPEC §5).
+- **G3 Confirmed in the runtime:** `records.create` accepts any `recordId` string (no validation), so `usage` ids like `2026-11-20|serpapi:global` are fine (Phase 2 open question). `uniqueOn` violations come back as `success:false, error:"Duplicate: …"` with no code; `tools.get` on a missing row returns `error: "Record not found"` (`RECORD_NOT_FOUND`). `maxLength` exists in 0.44.2 (`ColumnDefinition.maxLength`, enforced in `putRecord`).
+- **G4 `resolveAppRole` returns `viewer` for a signed-in user with no `users` row** (they've never opened a page that connects the records socket). Harmless for our gates (admin-only), but tests that need a `member` must open `/home` first.
+- **G5 JobRoom sends non-readers an empty snapshot** (`canRead ? jobs : []`, `worker.js` `onConnect`), so the admin-only `authorizeRead` leaks nothing even though the socket opens.
