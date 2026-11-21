@@ -1,6 +1,6 @@
 /**
- * /t/:tripId — the trip (SPEC §10). Crew, Destinations and Results exist;
- * Book is a disabled placeholder.
+ * /t/:tripId — the trip (SPEC §10): Crew, Destinations, Results, and Book
+ * (enabled once a destination is locked).
  *
  * Not-found: the room only sends trips whose memberIds include me, so a
  * trip I'm not on looks exactly like one that doesn't exist.
@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui'
 import { EmptyNote, ErrorState, LoadingState, Retryable } from '@/components/AsyncState'
 import { CrewTab } from '@/components/trip/CrewTab'
 import { DestinationsTab } from '@/components/trip/DestinationsTab'
+import { BookTab } from '@/components/trip/BookTab'
 import { ResultsTab } from '@/components/trip/ResultsTab'
 import { StatusBadge } from '@/components/trip/StatusBadge'
 import { dateRange } from '@/lib/format'
@@ -42,12 +43,17 @@ function Trip({ tripId, onRetry }: { tripId: string; onRetry: () => void }) {
   const { userId } = useAuth()
   const { records, status, error } = useQuery<TripData>('trips', { where: { recordId: tripId }, limit: 1 })
   const trip = records[0]
-  // Opens on Results once a trip has them; "Find fares" switches there too.
+  // Opens on Book once locked, on Results once a trip has them; "Find fares" and "Lock" switch too.
   const [tab, setTab] = useState<string | null>(null)
 
   if (status === 'loading') return <LoadingState label="Loading trip…" />
   if (status === 'error') return <ErrorState title="Could not load this trip" message={error} onRetry={onRetry} />
   if (!trip || !userId) return <TripNotFound />
+  const tripStatus = trip.data.status
+  const locked = tripStatus === 'locked'
+  const defaultTab = locked ? 'book' : tripStatus === 'results' || tripStatus === 'searching' ? 'results' : 'crew'
+  // A stale 'book' choice can't outlive the lock (no unlock today, but stay safe).
+  const current = tab === 'book' && !locked ? defaultTab : (tab ?? defaultTab)
 
   return (
     <>
@@ -66,14 +72,14 @@ function Trip({ tripId, onRetry }: { tripId: string; onRetry: () => void }) {
       </header>
 
       <Tabs
-        value={tab ?? (trip.data.status === 'results' || trip.data.status === 'searching' ? 'results' : 'crew')}
+        value={current}
         onValueChange={(v) => setTab(String(v))}
       >
         <TabsList className="w-full sm:w-fit">
           <TabsTrigger value="crew">Crew</TabsTrigger>
           <TabsTrigger value="destinations">Destinations</TabsTrigger>
           <TabsTrigger value="results">Results</TabsTrigger>
-          <TabsTrigger value="book" disabled title="Coming soon">
+          <TabsTrigger value="book" disabled={!locked} title={locked ? undefined : 'Opens when a destination is locked'}>
             Book
           </TabsTrigger>
         </TabsList>
@@ -84,7 +90,15 @@ function Trip({ tripId, onRetry }: { tripId: string; onRetry: () => void }) {
           <DestinationsTab trip={trip} me={userId} onSearchStarted={() => setTab('results')} />
         </TabsContent>
         <TabsContent value="results" className="pt-4">
-          <ResultsTab trip={trip} me={userId} onGoToDestinations={() => setTab('destinations')} />
+          <ResultsTab
+            trip={trip}
+            me={userId}
+            onGoToDestinations={() => setTab('destinations')}
+            onLocked={() => setTab('book')}
+          />
+        </TabsContent>
+        <TabsContent value="book" className="pt-4">
+          <BookTab trip={trip} me={userId} />
         </TabsContent>
       </Tabs>
     </>

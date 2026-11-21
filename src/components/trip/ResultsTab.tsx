@@ -9,8 +9,8 @@
  */
 import { useState, type ReactNode } from 'react'
 import { useMutations, useQuery, type RecordData } from 'deepspace'
-import { ExternalLink, Home, Lock, ThumbsUp } from 'lucide-react'
-import { Badge, Button, Tabs, TabsList, TabsTrigger, cn, useToast } from '@/components/ui'
+import { ExternalLink, Home, Lock, LockKeyhole, ThumbsUp } from 'lucide-react'
+import { Badge, Button, ConfirmModal, Tabs, TabsList, TabsTrigger, cn, useToast } from '@/components/ui'
 import { EmptyNote, ErrorState, LoadingState, Retryable } from '@/components/AsyncState'
 import { useAction } from '@/hooks/useAction'
 import type { PriceLevel } from '@/lib/flights'
@@ -25,6 +25,7 @@ import {
   type ResultPerson,
 } from '@/lib/results'
 import type { BudgetData, CandidateData, TravelerData, TripData } from '@/lib/types'
+import { emailReportText } from './BookTab'
 import { SearchStatus } from './SearchStatus'
 
 interface FareData {
@@ -56,14 +57,18 @@ export function ResultsTab({
   trip,
   me,
   onGoToDestinations,
+  onLocked,
 }: {
   trip: RecordData<TripData>
   me: string
   onGoToDestinations: () => void
+  onLocked: () => void
 }) {
   return (
     <Retryable>
-      {(retry) => <ResultsContent trip={trip} me={me} onRetry={retry} onGoToDestinations={onGoToDestinations} />}
+      {(retry) => (
+        <ResultsContent trip={trip} me={me} onRetry={retry} onGoToDestinations={onGoToDestinations} onLocked={onLocked} />
+      )}
     </Retryable>
   )
 }
@@ -73,12 +78,17 @@ function ResultsContent({
   me,
   onRetry,
   onGoToDestinations,
+  onLocked,
 }: {
   trip: RecordData<TripData>
   me: string
   onRetry: () => void
   onGoToDestinations: () => void
+  onLocked: () => void
 }) {
+  const toast = useToast()
+  const lock = useAction<{ emails: Parameters<typeof emailReportText>[0] }>('lockTrip')
+  const [locking, setLocking] = useState<Card | null>(null)
   const tripId = trip.recordId
   const candidates = useQuery<CandidateData>('candidates', { where: { tripId }, limit: 20 })
   // ≤ 6 destinations × ≤ 8 travelers = 48 fares / votes per trip.
@@ -110,6 +120,22 @@ function ResultsContent({
   const show = cards.some((c) => c.checked) || (searching && cards.length > 0)
   const isOrganizer = trip.data.organizerId === me
   const sorted = sortResultCards(cards, mode)
+  const locked = trip.data.status === 'locked'
+  // Lockable: organizer, results are in, and everyone has a fare there.
+  const canLock = isOrganizer && trip.data.status === 'results'
+
+  async function confirmLock() {
+    if (!locking) return
+    const res = await lock.run({ tripId, iata: locking.iata })
+    if (!res) return
+    if (res.success) {
+      toast.success(`Locked ${locking.city}`, emailReportText(res.data.emails))
+      setLocking(null)
+      onLocked()
+    } else {
+      toast.error(`Could not lock ${locking.city}`, res.error)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4" data-testid="results">
@@ -151,13 +177,25 @@ function ResultsContent({
                 card={card}
                 rank={card.checked && card.complete ? i + 1 : null}
                 tripId={tripId}
-                locked={trip.data.status === 'locked'}
+                locked={locked}
+                lockedHere={locked && trip.data.lockedIata === card.iata}
                 searching={searching}
+                onLock={canLock && card.checked && card.complete ? () => setLocking(card) : null}
               />
             ))}
           </ol>
         </>
       )}
+      <ConfirmModal
+        open={locking !== null}
+        onClose={() => setLocking(null)}
+        onConfirm={() => void confirmLock()}
+        loading={lock.pending}
+        variant="default"
+        title={`Lock ${locking ? `${locking.city} (${locking.iata})` : 'this destination'}?`}
+        description="Everyone on the app gets an email with their own booking link, voting closes, and nobody new can join. This can’t be undone."
+        confirmText="Lock and email everyone"
+      />
     </div>
   )
 }
@@ -173,13 +211,17 @@ function ResultCard({
   rank,
   tripId,
   locked,
+  lockedHere,
   searching,
+  onLock,
 }: {
   card: Card
   rank: number | null
   tripId: string
   locked: boolean
+  lockedHere: boolean
   searching: boolean
+  onLock: (() => void) | null
 }) {
   const level = card.priceLevel === 'unknown' ? null : LEVEL_BADGE[card.priceLevel]
   return (
@@ -203,6 +245,11 @@ function ResultCard({
             <span className="text-sm text-muted-foreground">{card.country}</span>
           </div>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {lockedHere && (
+              <Badge variant="default" size="sm" data-testid="locked-badge">
+                <LockKeyhole className="h-3 w-3" aria-hidden /> Locked
+              </Badge>
+            )}
             {level && (
               <Badge variant={level.variant} size="sm" title={level.title} data-testid="price-level-badge">
                 {level.label}
@@ -268,7 +315,15 @@ function ResultCard({
         </p>
       )}
 
-      <VoteButton tripId={tripId} card={card} locked={locked} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <VoteButton tripId={tripId} card={card} locked={locked} />
+        {onLock && (
+          <Button type="button" size="sm" variant="outline" onClick={onLock} data-testid="lock-button">
+            <LockKeyhole aria-hidden />
+            Lock this destination
+          </Button>
+        )}
+      </div>
     </li>
   )
 }
