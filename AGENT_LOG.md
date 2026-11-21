@@ -188,3 +188,34 @@ LIVE GET /api/debug/records -> HTTP 404 404 Not Found
 - I only checked layout at 390px in headless Chromium, not on a real phone.
 **I verified myself (how):**
 - …
+
+
+---
+
+## Phase 5 — Fare search and results — Sat Nov 21
+**Agent (Claude Code) did:**
+- Ruling applied: AI `max_tokens` 2048 → 3000 (`src/lib/limits.ts`, SPEC #29). Phase 4 decisions recorded as approved (SPEC #30).
+- `src/server/flights-source.ts`: the fixture seam (both gates: `ALLOW_DEBUG_ROUTES === 'true'` and a `__test-` name). Fixture answers are the sample rewritten for the route and varied by a hash of "origins>destination" (price −60…+180, times +0…+120 min, price level), with a 600 ms delay so progress is visible. No real SerpApi call was made this phase.
+- `src/server/fare-search.ts` (dispatched from `src/jobs.ts` with `createAppTools(env, env.OWNER_USER_ID)`): re-validated travelers × candidates, home pairs at $0 with no call, dedupe by origin set, 6h route cache in a new server-only `fareCache` collection, ≤ 30 calls per run and never past the global budget, 4 at a time, serial ledger, each fare row upserted as it arrives, throttled progress on the trip row, `ctx.signal` honoured, provider_unavailable stops the run (not counted, banner message), ranking aggregates with server-side budgets (real travelers only, positive amounts), snapshots, status → results; final-attempt failure → back to results/gathering with a generic error.
+- Actions: `startSearch` (organizer; locked / running / needs airports / needs destinations / caps via `decideRunStart`, all before enqueue; counters and trip fields rolled back on `enqueue_failed`) and `toggleVote` (member, own vote only).
+- UI: "Find fares" enabled (organizer; hints for why it's disabled; error-with-retry), progress bar from the trip row on Destinations and Results, Results tab enabled: Cheapest / Fairest / Together, cards with group total, each person's fare (origin, stops, times, airline, Google Flights link), price-level badge, "Everyone lands within", fits-everyone badge only when stored, the viewer's private budget line, "Missing fares for …", live vote button and tally, provider-unavailable banner, empty state. Pure view model in `src/lib/results.ts`. Checked at 390px.
+- Tests: unit `fare-search.test.ts` (19: dedupe, home pairs, cache incl. changed constraints and expiry, re-validation, run cap, global cap, provider_unavailable twice, generic error, retry without duplicates, duplicate delivery, final failure, skips, cancel, fitsAll privacy guard, fixture seam both ways, mid-run join), `flights-source.test.ts`, `search.test.ts` (startSearch + toggleVote), `results.test.ts`, schema tests for `fareCache`. e2e `tests/results.spec.ts` (two users).
+- Results: unit 19 files / 302 passed; `test run` (smoke+api) 31 passed, including the one real AI call at max_tokens 3000 ($0.00062); `test run e2e` with the real-call test excluded by `--grep` 44 passed; tsc 0, eslint 0. Real SerpApi calls: 0. Real Anthropic calls: 1.
+- Mutation checks: removing the call cap failed 3 job tests; removing the origin-set dedupe failed 6; both restored.
+**What broke / surprised me:**
+- My first fixture cache keys were global, so a second e2e run the same day would have been served instantly from cache and the progress check could race; scoped fixture keys per trip.
+- The first Results UI showed only a progress bar during a first search (no live fill-in); fixed after looking at the 390px screenshot.
+**Decisions & tradeoffs (please confirm):**
+- New `fareCache` collection (NOTES R1, SPEC #31).
+- Stale-search recovery after 20 min (R2). `__test-` budget exemption in dev/test (R3). A provider outage still uses one of the trip's 2 daily searches (R4).
+- Unanswered pairs (cap / outage / cancel) get `status 'error'` rows so cards say who's missing.
+- "Over someone's budget" badge when `fitsAll = 0` (only possible with ≥ 3 budgets).
+- Votes allowed in any status except locked; the button lives on the Results tab.
+- Watch mode returns `{ skipped }` for now.
+**How many real calls would a 3-traveler × 4-destination search make?** At most 12 (one per traveler × destination, $0.39). Fewer when two travelers have the identical home-airport set (one call per set and destination) or a destination is someone's home airport (no call). A repeat search within 6h makes 0. The global 80/day budget allows about six fresh searches of that size per day.
+**Unsure about:**
+- `flights.ts` is still unverified against a real SerpApi response (R7).
+- Concurrency and retries are tested with the fake store and fake JobContext; the real JobRoom path was exercised only by the fixture-mode e2e.
+- Layout checked at 390px in headless Chromium only.
+**I verified myself (how):**
+- …
