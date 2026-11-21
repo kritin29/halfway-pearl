@@ -25,13 +25,18 @@ export interface FakeStore {
   seed(collection: string, recordId: string, data: Record<string, unknown>, createdBy?: string): void
   /** Every integration call any tools instance made. */
   integrationCalls: Array<{ endpoint: string; data: unknown }>
+  /** Answer integration calls (the external boundary). Default: every call fails. */
+  onIntegration(handler: IntegrationHandler | null): void
 }
+
+export type IntegrationHandler = (endpoint: string, data: unknown) => ActionResult<unknown> | Promise<ActionResult<unknown>>
 
 const fail = <T>(error: string): ActionResult<T> => ({ success: false, error })
 
 export function createFakeStore(schemas: CollectionSchema[] = appSchemas): FakeStore {
   const tables = new Map<string, Map<string, Row>>()
   const integrationCalls: FakeStore['integrationCalls'] = []
+  let integrationHandler: IntegrationHandler | null = null
   let nextId = 1
 
   const schemaOf = (collection: string) => schemas.find((s) => s.name === collection)
@@ -141,7 +146,8 @@ export function createFakeStore(schemas: CollectionSchema[] = appSchemas): FakeS
         return { success: true, data: { records: clone(records) as never, count: records.length } }
       },
       async integration(endpoint, data) {
-        integrationCalls.push({ endpoint, data })
+        integrationCalls.push({ endpoint, data: clone(data) })
+        if (integrationHandler) return (await integrationHandler(endpoint, data)) as never
         return fail('integrations are not available in unit tests')
       },
       async registerUser() {
@@ -158,5 +164,8 @@ export function createFakeStore(schemas: CollectionSchema[] = appSchemas): FakeS
       table(collection).set(recordId, { recordId, data: clone(data), createdBy, createdAt: now, updatedAt: now })
     },
     integrationCalls,
+    onIntegration(handler) {
+      integrationHandler = handler
+    },
   }
 }

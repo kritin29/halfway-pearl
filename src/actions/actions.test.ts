@@ -52,9 +52,21 @@ afterEach(() => {
 })
 
 describe('registry', () => {
-  it('exposes exactly the phase 3a actions', () => {
+  it('exposes exactly the phase 3-4 actions', () => {
     expect(Object.keys(actions).sort()).toEqual(
-      ['__testLockTrip', 'addGhost', 'createTrip', 'joinTrip', 'previewInvite', 'removeGhost', 'updateGhost'].sort(),
+      [
+        '__testLockTrip',
+        'addCandidate',
+        'addGhost',
+        'addMidpointHubs',
+        'createTrip',
+        'joinTrip',
+        'previewInvite',
+        'removeCandidate',
+        'removeGhost',
+        'suggestCandidates',
+        'updateGhost',
+      ].sort(),
     )
   })
 })

@@ -22,6 +22,13 @@ export type ErrorCode =
   | 'cap_reached'
   | 'conflict'
   | 'server_error'
+  // Destinations (src/actions/candidates.ts)
+  | 'candidates_full'
+  | 'duplicate'
+  | 'search_running'
+  | 'needs_airports'
+  | 'provider_unavailable'
+  | 'ai_error'
 
 export type Failure = { success: false; error: string; code: ErrorCode }
 
