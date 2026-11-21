@@ -142,6 +142,7 @@ const ACTIONS = [
   'toggleVote',
   'lockTrip',
   'setWatch',
+  'checkFaresNow',
   '__testLockTrip',
 ]
 

@@ -20,6 +20,8 @@ import { isTestTrip } from '../server/test-seam'
 import { defineAction, fail, must, ok, requireOrganizer, type Trip } from '../server/trip-access'
 import { queryTravelers } from '../server/trip-rows'
 import { getUsageCounts, incrementUsage } from '../server/usage'
+import { enqueueWatchRun } from '../server/watch-start'
+import { dateInZone, isWatchPending, isWatchWindowOpen } from '../lib/watch'
 import { queryCandidates } from './candidates'
 
 /** A 'searching' trip whose row hasn't changed for this long is stuck (its job died), not running. */
@@ -101,7 +103,7 @@ export const startSearch = defineAction<Env>('startSearch', async ({ userId, par
       env.JOB_ROOMS,
       `app:${env.DEEPSPACE_APP_ID}`,
       'fare-search',
-      { tripId: trip.id, mode: 'full' },
+      { tripId: trip.id, mode: 'full', countedOn: day },
       { maxAttempts: 2, enqueuedBy: userId },
     )
   } catch (err) {
@@ -117,4 +119,51 @@ export const startSearch = defineAction<Env>('startSearch', async ({ userId, par
 
   must(await tools.update('trips', trip.id, { searchJobId: jobId }), 'store job id')
   return ok({ jobId })
+})
+
+/**
+ * checkFaresNow (SPEC §6): the organizer runs the fare watch on demand, the
+ * same run the daily cron does (shortlist re-check, snapshot, alert emails).
+ *
+ *   organizer → status results or locked (not while searching) → departure
+ *   more than a day away → no watch run already queued → caps (3 watch
+ *   checks per trip per day, shared with the cron; global SerpApi budget)
+ *   → count it → mark `watchQueuedAt` → enqueue.
+ *
+ * In dev/test only, `__test-` trips (fixture answers, nothing spent) skip
+ * the global budget; the per-trip limit still applies.
+ */
+export const checkFaresNow = defineAction<Env>('checkFaresNow', async ({ userId, params, tools, env }) => {
+  const tripId = recordId(params.tripId, 'Trip')
+  if (!tripId.ok) return fail('invalid_params', tripId.error)
+  const access = await requireOrganizer(tools, tripId.value, userId)
+  if (!access.ok) return access.result
+  const trip = access.trip
+  const now = new Date()
+
+  if (trip.data.status === 'searching') return fail('search_running', 'Wait for the fare search to finish first.')
+  if (trip.data.status !== 'results' && trip.data.status !== 'locked') {
+    return fail('not_ready', 'Find fares first: the watch re-checks destinations once there are results.')
+  }
+  if (!isWatchWindowOpen(trip.data.outboundDate, dateInZone(now))) {
+    return fail('watch_ended', 'Fare watching has stopped because the trip starts within a day.')
+  }
+  if (isWatchPending(trip.data.watchQueuedAt, now)) return fail('watch_running', 'Fares are already being checked.')
+
+  const day = usageDay(now)
+  const keys = { global: usageKeys.serpapiGlobal(), watch: usageKeys.watchTrip(trip.id) }
+  const counts = await getUsageCounts(tools, day, Object.values(keys))
+  const test = isTestTrip(env, trip.data.name)
+  const decision = decideRunStart('watch', {
+    globalSerpapiCallsToday: test ? 0 : counts[keys.global],
+    tripFullSearchesToday: 0,
+    tripWatchChecksToday: counts[keys.watch],
+    userTripsSearchedToday: 0,
+    userAlreadySearchedThisTripToday: true,
+  })
+  if (!decision.ok) return fail('cap_reached', decision.message)
+
+  const started = await enqueueWatchRun(tools, env, trip, { day, now, enqueuedBy: userId })
+  if (!started.ok) return fail('enqueue_failed', 'The fare check couldn’t be started. Please try again.')
+  return ok({ jobId: started.jobId })
 })

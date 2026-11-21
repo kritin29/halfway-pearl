@@ -1,35 +1,29 @@
 /**
- * Cron task definitions — registered into the AppCronRoom DO at construction
- * time (worker.ts). The DO alarm fires `runTask(name, env)` on the schedule
- * declared here; the DO itself records executions, tracks history, and
- * pushes status to admin clients via the `/ws/cron/:roomId` WebSocket.
+ * Cron tasks (SPEC §9), registered into AppCronRoom (worker.ts). The DO
+ * alarm calls `runTask(name, env)` on schedule and logs
+ * `[cron] <task> ok|failed` for every run (`deepspace logs --search cron`).
  *
- * Each task declares EITHER `intervalMinutes` (run every N minutes) OR
- * `schedule` + `timezone` (5-field cron expression). CronRoom validates
- * the config at construction time and throws on ambiguous declarations.
- *
- * Example:
- *
- *   import type { CronTask } from 'deepspace/worker'
- *   import { buildCronContext } from 'deepspace/worker'
- *
- *   export const tasks: CronTask[] = [
- *     { name: 'heartbeat', intervalMinutes: 1 },
- *     { name: 'daily-report', schedule: '0 9 * * *', timezone: 'America/New_York' },
- *   ]
- *
- *   export async function runTask(name: string, env: Env): Promise<void> {
- *     const ctx = buildCronContext(env, env.OWNER_USER_ID, `app:${env.DEEPSPACE_APP_ID}`)
- *     if (name === 'heartbeat') {
- *       // …
- *     }
- *   }
+ * Tasks run as the app owner with RBAC-off tools from `createAppTools`
+ * (not `buildCronContext`, which lacks get/orderBy/upsert; NOTES C8).
+ * Cron writes (trigger/pause/resume) are admin-only (realtime-routes.ts).
  */
-
 import type { CronTask } from 'deepspace/worker'
+import type { Env } from '../worker'
+import { WATCH_TIMEZONE } from './lib/limits'
+import { createAppTools } from './server/app-tools'
+import { runFareWatchCron } from './server/fare-watch-cron'
 
-export const tasks: CronTask[] = []
+export const tasks: CronTask[] = [
+  // Every morning: enqueue watch runs for trips with the fare watch on (src/server/fare-watch-cron.ts).
+  { name: 'fare-watch', schedule: '0 8 * * *', timezone: WATCH_TIMEZONE },
+]
 
-export async function runTask(_name: string, _env: unknown): Promise<void> {
-  // No-op — implement your cron tasks here. Dispatch on `_name`.
+export async function runTask(name: string, env: Env): Promise<void> {
+  switch (name) {
+    case 'fare-watch':
+      await runFareWatchCron(createAppTools(env, env.OWNER_USER_ID), env)
+      return
+    default:
+      throw new Error(`Unknown cron task: ${name}`)
+  }
 }

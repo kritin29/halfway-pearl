@@ -6,7 +6,7 @@ import { LIMITS } from '../lib/limits'
 import { createFakeStore, type FakeStore } from '../server/testing/fake-tools'
 import { addCandidate } from './candidates'
 import { addGhost } from './ghosts'
-import { startSearch } from './search'
+import { checkFaresNow, startSearch } from './search'
 import { createTrip, joinTrip } from './trips'
 import { toggleVote } from './votes'
 
@@ -85,7 +85,7 @@ describe('startSearch', () => {
       'JOB_ROOMS_BINDING',
       'app:app123',
       'fare-search',
-      { tripId, mode: 'full' },
+      { tripId, mode: 'full', countedOn: DAY },
       { maxAttempts: 2, enqueuedBy: ALICE },
     )
     expect(tripRow(tripId).data).toMatchObject({
@@ -244,5 +244,99 @@ describe('toggleVote', () => {
     const res = await toggleVote({ userId: BOB, params: { tripId, iata: 'AUS' }, tools: racing, env: ENV, callerJwt: 'jwt' })
     expect(data(res)).toEqual({ iata: 'AUS', voted: true })
     expect(votes(tripId)).toHaveLength(1)
+  })
+})
+
+describe('checkFaresNow', () => {
+  /** A trip with results, the way the full search leaves it. */
+  async function withResults(name?: string) {
+    const tripId = await ready(name)
+    await finish(tripId)
+    return tripId
+  }
+
+  it('organizer: counts a watch check, marks the trip queued, enqueues a watch run', async () => {
+    const tripId = await withResults()
+    expect(data(await call(checkFaresNow, ALICE, { tripId }))).toEqual({ jobId: 'job_1' })
+    expect(enqueue).toHaveBeenCalledWith(
+      'JOB_ROOMS_BINDING',
+      'app:app123',
+      'fare-search',
+      { tripId, mode: 'watch', countedOn: DAY },
+      { maxAttempts: 2, enqueuedBy: ALICE },
+    )
+    expect(tripRow(tripId).data).toMatchObject({ status: 'results', watchQueuedAt: `${DAY}T12:00:00.000Z`, watchError: null })
+    expect(usageCount(usageKeys.watchTrip(tripId))).toBe(1)
+    // A watch check isn't a full search.
+    expect(usageCount(usageKeys.fullSearchTrip(tripId))).toBe(0)
+    expect(store.integrationCalls).toEqual([])
+  })
+
+  it('works on a locked trip too', async () => {
+    const tripId = await withResults()
+    data(await server().update('trips', tripId, { status: 'locked', lockedIata: 'AUS' }))
+    expect(data(await call(checkFaresNow, ALICE, { tripId }))).toEqual({ jobId: 'job_1' })
+  })
+
+  it('organizer only; non-members get not_found', async () => {
+    const tripId = await withResults()
+    expect(await call(checkFaresNow, BOB, { tripId })).toMatchObject({ success: false, code: 'forbidden' })
+    expect(await call(checkFaresNow, CAROL, { tripId })).toMatchObject({ success: false, code: 'not_found' })
+    expect(await call(checkFaresNow, ALICE, {})).toMatchObject({ success: false, code: 'invalid_params' })
+    expect(enqueue).not.toHaveBeenCalled()
+  })
+
+  it('refused while searching, before results, and while a check is already queued (until it goes stale)', async () => {
+    const tripId = await ready()
+    expect(await call(checkFaresNow, ALICE, { tripId })).toMatchObject({ success: false, code: 'not_ready' })
+    data(await call(startSearch, ALICE, { tripId }))
+    expect(await call(checkFaresNow, ALICE, { tripId })).toMatchObject({ success: false, code: 'search_running' })
+
+    await finish(tripId)
+    data(await call(checkFaresNow, ALICE, { tripId }))
+    expect(await call(checkFaresNow, ALICE, { tripId })).toMatchObject({ success: false, code: 'watch_running' })
+    // The job clears the mark when it's done; a mark left by a dead job expires.
+    vi.setSystemTime(new Date(Date.parse(`${DAY}T12:00:00Z`) + LIMITS.staleWatchMs))
+    expect(data(await call(checkFaresNow, ALICE, { tripId }))).toMatchObject({ jobId: expect.any(String) })
+  })
+
+  it('refused once departure is a day away or less', async () => {
+    const tripId = await withResults()
+    data(await server().update('trips', tripId, { outboundDate: '2026-11-21' }))
+    expect(await call(checkFaresNow, ALICE, { tripId })).toMatchObject({ success: false, code: 'watch_ended' })
+    data(await server().update('trips', tripId, { outboundDate: '2026-11-22' }))
+    expect(await call(checkFaresNow, ALICE, { tripId })).toMatchObject({ success: true })
+  })
+
+  it('at most 3 checks per trip per day (cap_reached), counting the cron’s', async () => {
+    const tripId = await withResults()
+    const key = usageKeys.watchTrip(tripId)
+    data(await server().create('usage', { day: DAY, key, count: 2 }, usageRecordId(DAY, key)))
+    data(await call(checkFaresNow, ALICE, { tripId }))
+    data(await server().update('trips', tripId, { watchQueuedAt: null }))
+    const refused = await call(checkFaresNow, ALICE, { tripId })
+    expect(refused).toMatchObject({ success: false, code: 'cap_reached' })
+    expect(refused.success ? '' : refused.error).toContain('3 times today')
+    expect(usageCount(key)).toBe(LIMITS.maxWatchChecksPerTripPerDay)
+  })
+
+  it('refused when the global SerpApi budget is spent, except for __test- trips in dev/test', async () => {
+    const global = usageKeys.serpapiGlobal()
+    data(await server().create('usage', { day: DAY, key: global, count: LIMITS.maxSerpapiCallsPerDayGlobal }, usageRecordId(DAY, global)))
+    const real = await withResults()
+    expect(await call(checkFaresNow, ALICE, { tripId: real }, TEST_ENV)).toMatchObject({ success: false, code: 'cap_reached' })
+    const test = await withResults('__test-watch')
+    expect(await call(checkFaresNow, ALICE, { tripId: test }, TEST_ENV)).toMatchObject({ success: true })
+    // Without the dev/test flag the same trip is held to the global budget.
+    data(await server().update('trips', test, { watchQueuedAt: null }))
+    expect(await call(checkFaresNow, ALICE, { tripId: test })).toMatchObject({ success: false, code: 'cap_reached' })
+  })
+
+  it('enqueue failure: the trip goes back to how it was and the check isn’t counted', async () => {
+    const tripId = await withResults()
+    enqueue.mockRejectedValueOnce(new Error('enqueueJob failed: 500'))
+    expect(await call(checkFaresNow, ALICE, { tripId })).toMatchObject({ success: false, code: 'enqueue_failed' })
+    expect(tripRow(tripId).data.watchQueuedAt ?? null).toBeNull()
+    expect(usageCount(usageKeys.watchTrip(tripId))).toBe(0)
   })
 })

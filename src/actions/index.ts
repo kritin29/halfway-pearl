@@ -3,7 +3,7 @@ import type { Env } from '../../worker'
 import { addCandidate, addMidpointHubs, removeCandidate, suggestCandidates } from './candidates'
 import { addGhost, removeGhost, updateGhost } from './ghosts'
 import { lockTrip, setWatch } from './lock'
-import { startSearch } from './search'
+import { checkFaresNow, startSearch } from './search'
 import { createTrip, joinTrip, previewInvite, testLockTrip } from './trips'
 import { toggleVote } from './votes'
 
@@ -26,6 +26,7 @@ export const actions: Record<string, ActionHandler<Env>> = {
   toggleVote,
   lockTrip,
   setWatch,
+  checkFaresNow,
   // Test-only; refuses everything unless ALLOW_DEBUG_ROUTES === 'true' (src/server/test-seam.ts).
   __testLockTrip: testLockTrip,
 }

@@ -70,7 +70,7 @@ export const lockTrip = defineAction<Env>('lockTrip', async ({ userId, params, t
   return ok({ tripId: tripId.value, iata: code.value, alreadyLocked, emails })
 })
 
-/** Turn the daily fare watch on or off (SPEC §3.9). The watch itself arrives in Phase 7. */
+/** Turn the daily fare watch on or off (SPEC §3.9). The cron watches only trips with it on. */
 export const setWatch = defineAction<Env>('setWatch', async ({ userId, params, tools }) => {
   const tripId = recordId(params.tripId, 'Trip')
   if (!tripId.ok) return fail('invalid_params', tripId.error)
