@@ -1,6 +1,7 @@
 import { test, expect, loadAllTestAccounts } from 'deepspace/testing'
 import { readFileSync } from 'node:fs'
 import { bearerFor } from './helpers/auth'
+import { act, asClient, openApp, testTripName } from './helpers/trips'
 
 test.describe('API tests', () => {
   test('auth proxy forwards to auth worker', async ({ request }) => {
@@ -126,7 +127,19 @@ test.describe('cron and job rooms', () => {
 })
 
 /** Every action in src/actions/index.ts (a unit test keeps the registry to exactly these). */
-const ACTIONS = ['createTrip', 'joinTrip', 'previewInvite', 'addGhost', 'updateGhost', 'removeGhost', '__testLockTrip']
+const ACTIONS = [
+  'createTrip',
+  'joinTrip',
+  'previewInvite',
+  'addGhost',
+  'updateGhost',
+  'removeGhost',
+  'addCandidate',
+  'removeCandidate',
+  'addMidpointHubs',
+  'suggestCandidates',
+  '__testLockTrip',
+]
 
 test.describe('actions require a verified token', () => {
   for (const name of ACTIONS) {
@@ -220,5 +233,75 @@ test.describe('trip actions across two accounts', () => {
     })
     expect(res.status()).toBe(400)
     expect(await res.json()).toMatchObject({ success: false, code: 'invalid_params' })
+  })
+})
+
+/**
+ * The ONE real AI call per test run (CLAUDE.md: at most one real call per
+ * integration endpoint per run). suggestCandidates → anthropic/chat-completion
+ * with claude-haiku-5-5 / max_tokens 2048. Asserts our envelope and the
+ * validated rows, not the model's exact words. The trip is `__test-`, so the
+ * 5/day AI cap doesn't lock the pool account out after a few local runs
+ * (exempt only when ALLOW_DEBUG_ROUTES === 'true'; unit-tested).
+ */
+test.describe('AI destination suggestions (one real call)', () => {
+  test.skip(usableTestAccounts < 1, NEEDS_ACCOUNTS)
+
+  test('suggestCandidates makes one real anthropic call and adds only validated destinations', async ({
+    users,
+    baseURL,
+  }) => {
+    test.setTimeout(120_000)
+    const [alice] = await users(1)
+    const created = await act<{ tripId: string }>(alice, baseURL!, 'createTrip', {
+      name: testTripName('ai'),
+      outboundDate: futureDate(40),
+      returnDate: futureDate(43),
+      vibe: 'warm, walkable, great food, not too pricey',
+    })
+    expect(created).toMatchObject({ success: true })
+    const tripId = created.data!.tripId
+    for (const [displayName, homeAirports] of [
+      ['Chicago friend', ['ORD', 'MDW']],
+      ['Boston friend', ['BOS']],
+      ['Denver friend', ['DEN']],
+    ] as const) {
+      expect(await act(alice, baseURL!, 'addGhost', { tripId, displayName, homeAirports })).toMatchObject({
+        success: true,
+      })
+    }
+    expect(await act(alice, baseURL!, 'addCandidate', { tripId, iata: 'BNA' })).toMatchObject({ success: true })
+
+    const res = await act<{
+      added: Array<{ iata: string; city: string; why: string; source: string }>
+      dropped: number
+      debug?: { prompt: { system: string; user: string }; raw: unknown }
+    }>(alice, baseURL!, 'suggestCandidates', { tripId })
+    // Printed for the phase summary: the exact prompt and the model's raw reply.
+    console.log(`AI PROMPT (system):\n${res.data?.debug?.prompt.system}`)
+    console.log(`AI PROMPT (user):\n${res.data?.debug?.prompt.user}`)
+    console.log(`AI RAW RESPONSE:\n${JSON.stringify(res.data?.debug?.raw ?? res, null, 2)}`)
+    console.log(`AI RESULT:\n${JSON.stringify({ added: res.data?.added, dropped: res.data?.dropped }, null, 2)}`)
+
+    expect(res, 'suggestCandidates').toMatchObject({ success: true })
+    const added = res.data!.added
+    expect(added.length).toBeGreaterThanOrEqual(1)
+    expect(added.length).toBeLessThanOrEqual(5) // 6 max, BNA already there
+    for (const a of added) {
+      expect(a.source).toBe('ai')
+      expect(a.iata).toMatch(/^[A-Z]{3}$/)
+      expect(a.iata).not.toBe('BNA')
+      expect(a.why.length).toBeLessThanOrEqual(140)
+    }
+    expect(new Set(added.map((a) => a.iata)).size).toBe(added.length)
+
+    // The rows are really there, readable by the member (RBAC on).
+    await openApp(alice)
+    const rows = await asClient(alice, baseURL!, 'records_query', { collection: 'candidates', where: { tripId } })
+    const stored = rows.body.result?.data?.records ?? []
+    expect(stored.map((r) => r.data.iata).sort()).toEqual(['BNA', ...added.map((a) => a.iata)].sort())
+    for (const r of stored.filter((r) => r.data.source === 'ai')) {
+      expect(String(r.data.why).length).toBeLessThanOrEqual(140)
+    }
   })
 })
