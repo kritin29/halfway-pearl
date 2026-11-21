@@ -124,3 +124,101 @@ test.describe('cron and job rooms', () => {
     }
   })
 })
+
+/** Every action in src/actions/index.ts (a unit test keeps the registry to exactly these). */
+const ACTIONS = ['createTrip', 'joinTrip', 'addGhost', 'updateGhost', 'removeGhost']
+
+test.describe('actions require a verified token', () => {
+  for (const name of ACTIONS) {
+    test(`${name} without a token is 401`, async ({ request }) => {
+      const none = await request.post(`/api/actions/${name}`, { data: {} })
+      expect(none.status()).toBe(401)
+      const forged = await request.post(`/api/actions/${name}`, {
+        headers: { Authorization: 'Bearer not-a-real-jwt' },
+        data: {},
+      })
+      expect(forged.status()).toBe(401)
+    })
+  }
+})
+
+/** Dates relative to today, so the trip is always in the future. */
+function futureDate(daysAhead: number): string {
+  return new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0, 10)
+}
+
+test.describe('trip actions across two accounts', () => {
+  test.skip(usableTestAccounts < 2, NEEDS_ACCOUNTS)
+
+  test('a non-member cannot act on someone else’s trip', async ({ users, baseURL }) => {
+    const [alice, bob] = await users(2)
+    const [aliceToken, bobToken] = await Promise.all([bearerFor(alice, baseURL!), bearerFor(bob, baseURL!)])
+    const act = async (token: string, name: string, params: unknown) => {
+      const res = await alice.context.request.post(new URL(`/api/actions/${name}`, baseURL!).toString(), {
+        headers: { Authorization: `Bearer ${token}` },
+        data: params as Record<string, unknown>,
+      })
+      expect(res.status(), name).toBe(200)
+      return (await res.json()) as { success: boolean; data?: Record<string, string>; code?: string }
+    }
+
+    // Sanity: the token is accepted (unknown action → 404, not 401).
+    const unknown = await alice.context.request.post(new URL('/api/actions/noSuchAction', baseURL!).toString(), {
+      headers: { Authorization: `Bearer ${aliceToken}` },
+      data: {},
+    })
+    expect(unknown.status()).toBe(404)
+
+    const created = await act(aliceToken, 'createTrip', {
+      name: '__api-test trip',
+      outboundDate: futureDate(20),
+      returnDate: futureDate(23),
+    })
+    expect(created.success).toBe(true)
+    const { tripId, inviteCode } = created.data!
+    const ghost = await act(aliceToken, 'addGhost', { tripId, displayName: 'Grandpa', homeAirports: ['ORD'] })
+    expect(ghost.success).toBe(true)
+    const ghostId = ghost.data!.ghostId
+
+    // Bob is not a member: same answer as a trip that doesn't exist.
+    const outsider = [
+      ['addGhost', { tripId, displayName: 'Intruder', homeAirports: ['BNA'] }],
+      ['updateGhost', { tripId, ghostId, displayName: 'Hijacked' }],
+      ['removeGhost', { tripId, ghostId }],
+    ] as const
+    for (const [name, params] of outsider) {
+      expect(await act(bobToken, name, params), name).toMatchObject({ success: false, code: 'not_found' })
+    }
+    expect(await act(bobToken, 'joinTrip', { inviteCode: 'WrongCode123' })).toMatchObject({
+      success: false,
+      code: 'not_found',
+    })
+
+    // Bob joins with the real code (twice: idempotent), and is then a member but not the organizer.
+    expect(await act(bobToken, 'joinTrip', { inviteCode })).toMatchObject({
+      success: true,
+      data: { tripId, alreadyMember: false },
+    })
+    expect(await act(bobToken, 'joinTrip', { inviteCode })).toMatchObject({
+      success: true,
+      data: { tripId, alreadyMember: true },
+    })
+    for (const [name, params] of outsider) {
+      expect(await act(bobToken, name, params), name).toMatchObject({ success: false, code: 'forbidden' })
+    }
+
+    // The ghost survived every attempt; the organizer can still remove it.
+    expect(await act(aliceToken, 'removeGhost', { tripId, ghostId })).toMatchObject({ success: true })
+  })
+
+  test('a malformed body is a 400, not a crash', async ({ users, baseURL }) => {
+    const [alice] = await users(1)
+    const token = await bearerFor(alice, baseURL!)
+    const res = await alice.context.request.post(new URL('/api/actions/createTrip', baseURL!).toString(), {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: Buffer.from('{not json'),
+    })
+    expect(res.status()).toBe(400)
+    expect(await res.json()).toMatchObject({ success: false, code: 'invalid_params' })
+  })
+})
