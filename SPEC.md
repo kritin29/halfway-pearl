@@ -149,8 +149,8 @@ Every action: (1) load the trip with `tools.get`, (2) check the caller is in `me
 
 | action | who | does |
 |---|---|---|
-| `createTrip({name, outboundDate, returnDate, vibe})` | any signed-in | creates trip (memberIds=[caller]), inviteCode, caller's traveler row |
-| `joinTrip({inviteCode})` | any signed-in | adds caller to trip.memberIds, creates traveler row, **propagates new memberIds to every trip-scoped row** (travelers, candidates, fares, votes, fareSnapshots). Idempotent. Max 8 travelers incl. ghosts |
+| `createTrip({name, outboundDate, returnDate, vibe})` | any signed-in | creates trip (memberIds=[caller]), inviteCode, caller's traveler row. Cap: 10 trips per user per UTC day (`usage`, `cap_reached`) |
+| `joinTrip({inviteCode})` | any signed-in | adds caller to trip.memberIds, creates traveler row, **propagates new memberIds to every trip-scoped row** (travelers, candidates, fares, votes, fareSnapshots). Idempotent. Max 8 travelers incl. ghosts. Refuses newcomers to a locked trip (`trip_locked`) |
 | `addGhost({tripId, displayName, homeAirports, ...})` / `updateGhost` / `removeGhost` | organizer | ghost traveler rows |
 | `addCandidate({tripId, iata})` | member | validates IATA against `src/data/airports.json`; max 6 |
 | `suggestCandidates({tripId})` | organizer | AI (`claude-haiku-5-5`, `max_tokens` ≈ 600, JSON-only system prompt) → JSON → validate each IATA → insert up to (6 − existing). Cap: 5 AI calls per user per day (`usage`) |
@@ -289,3 +289,10 @@ Hotels total (`serpapi/hotels`), flexible dates (±1 day), MapLibre map of origi
 | 19 | Integration failures classified: `provider_unavailable` (429 / out of searches: no retry, no further calls, not counted in `usage`, human message in `searchError`) vs `error` | §7 Integration failures, §8.9 | developer decision |
 | 20 | Booking URL: use SerpApi's URL only when it carries a search; otherwise build a `?q=` Google Flights URL. Defensive parsing; outbound-only times | §7 steps 5–6 | SerpApi docs |
 | 21 | Approved Phase 2 choices: incomplete candidates have blank totals and sort last; watch checks capped at 3/trip/day (separate from the 2 full searches); under-budget email only on an above→at-or-below crossing; midpoint excludes home airports. Caps live in `src/lib/limits.ts` | §7, §8, `src/lib/limits.ts` | AGENT_LOG Phase 2 |
+
+### 2026-11-21 — Phase 3a rulings (developer decisions)
+| # | Change | Where in this spec | From |
+|---|---|---|---|
+| 22 | `joinTrip` refuses newcomers to a locked trip with `trip_locked` (existing travelers still get `alreadyMember`) | §6 joinTrip | developer ruling |
+| 23 | Trip creation capped at 10 per user per UTC day via `usage` (`maxTripsCreatedPerUserPerDay` in `src/lib/limits.ts`), `cap_reached` | §6 createTrip | developer ruling |
+| 24 | Kept as built: a non-member gets `not_found` for an existing trip; a malformed action body gets HTTP 400 | §6 | developer ruling |

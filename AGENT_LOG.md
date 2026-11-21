@@ -107,3 +107,33 @@ Format:
 - api tests now need pool accounts (they skip with a message if there are fewer than 2).
 **I verified myself (how):**
 - …
+
+---
+
+## Phase 3b — First screens and the two-user flow — Sat Nov 21
+**Agent (Claude Code) did:**
+- Rulings from 3a: `joinTrip` → `trip_locked` for newcomers to a locked trip; trip creation capped at 10/user/UTC day in `usage` (`cap_reached`, counted only on success). SPEC §6 + Changelog rows 22–24.
+- New actions: `previewInvite` (what /join shows to a non-member) and the test-only `__testLockTrip` (NOTES P1, P2).
+- Screens under `(app)/(protected)`: `/trips` (my trips + create form, navigates after the server confirms), `/join/:code` (preview, Join, messages for wrong code / full / locked), `/t/:tripId` with the Crew tab (member + ghost list with "airports set" / "budget set ✓" / Ghost badges; Your settings; private budget; organizer invite link + ghost add/edit/remove). Other tabs disabled. "Trips" in the nav.
+- The client writes only its own `travelers` row (constraint fields) and its own `budgets` row (`tripId`, `maxUsd`; `userId` is stamped by the room), then sets `hasBudget = 1`. Write controls wait for `useMutations().ready`; every async surface has loading / empty / error-with-retry / success.
+- Pure helpers with tests: `src/lib/format.ts`, `searchAirports` in `src/lib/airports.ts`.
+- `tests/trips.spec.ts` (users(2), 7 tests): UI create → invite link → join → Bob's airport change live on Alice's page; budget privacy when Bob joined before and after the budget was set (his page's `useQuery('budgets')` row count, every WebSocket frame he received, and the RBAC-on agent tool route, with a control showing Alice's own probe returns her row); non-member not-found; invite page errors; live ghost add/edit/remove; `usage` unreadable and unwritable for both users.
+- Results: tsc 0 errors, eslint 0 problems, unit 13 files / 202 tests, smoke+api 24, e2e 34 — all pass.
+- Mutation check: budgets `read: true` + trips `read: true` → the two budget tests and the not-found test fail; restored.
+- Phone-width (390px) screenshots of /trips and a trip page checked by eye; moved the create form above the list.
+**What broke / surprised me:**
+- My frame check flagged `maxUsd` on Bob's socket: it was the room's schema listing (column names, no values), not data. The test now skips that one message type and still checks the amount in every frame (NOTES P3).
+- The agent tool route wants `{ input: {...} }`; a bare body is `invalid_tool_input` (NOTES P5).
+- Local test data persists, so a real 10/day cap would break repeated e2e runs; test trips are exempt only in dev/test (NOTES P2).
+**Decisions & tradeoffs (please confirm):**
+- `previewInvite` and `__testLockTrip` are new and not yet in SPEC (NOTES P1, P2).
+- The invite page shows "locked"/"full" before Join is pressed (from the preview); the action still refuses on its own.
+- Invite link and ghost controls are organizer-only; members see the list and chips.
+- Settings save on a button (not autosave). A budget is a whole number of dollars, 1–100,000.
+- `/home` and the scaffold pages stay for now; the brand link still goes to `/home`.
+**Unsure about:**
+- I didn't test on a real phone, only a 390px viewport. Copy-to-clipboard may be blocked on some browsers; the link is selectable as a fallback.
+- `memberIds` live-join (Bob's open page receiving rows once he's added) works in the e2e runs; untested under slow networks.
+**I verified myself (how):**
+- …
+
