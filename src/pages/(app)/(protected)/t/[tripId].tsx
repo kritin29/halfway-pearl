@@ -1,6 +1,6 @@
 /**
- * /t/:tripId — the trip (SPEC §10). Only the Crew tab exists for now; the
- * others are disabled placeholders.
+ * /t/:tripId — the trip (SPEC §10). Crew and Destinations exist; Results and
+ * Book are disabled placeholders.
  *
  * Not-found: the room only sends trips whose memberIds include me, so a
  * trip I'm not on looks exactly like one that doesn't exist.
@@ -11,6 +11,7 @@ import { ArrowLeft, CalendarDays } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui'
 import { EmptyNote, ErrorState, LoadingState, Retryable } from '@/components/AsyncState'
 import { CrewTab } from '@/components/trip/CrewTab'
+import { DestinationsTab } from '@/components/trip/DestinationsTab'
 import { StatusBadge } from '@/components/trip/StatusBadge'
 import { dateRange } from '@/lib/format'
 import type { TripData } from '@/lib/types'
@@ -63,9 +64,7 @@ function Trip({ tripId, onRetry }: { tripId: string; onRetry: () => void }) {
       <Tabs defaultValue="crew">
         <TabsList className="w-full sm:w-fit">
           <TabsTrigger value="crew">Crew</TabsTrigger>
-          <TabsTrigger value="destinations" disabled title="Coming soon">
-            Destinations
-          </TabsTrigger>
+          <TabsTrigger value="destinations">Destinations</TabsTrigger>
           <TabsTrigger value="results" disabled title="Coming soon">
             Results
           </TabsTrigger>
@@ -75,6 +74,9 @@ function Trip({ tripId, onRetry }: { tripId: string; onRetry: () => void }) {
         </TabsList>
         <TabsContent value="crew" className="pt-4">
           <CrewTab trip={trip} me={userId} />
+        </TabsContent>
+        <TabsContent value="destinations" className="pt-4">
+          <DestinationsTab trip={trip} me={userId} />
         </TabsContent>
       </Tabs>
     </>
