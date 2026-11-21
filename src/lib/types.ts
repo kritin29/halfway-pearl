@@ -44,6 +44,29 @@ export interface BudgetData {
   maxUsd: number
 }
 
+export const CANDIDATE_SOURCES = ['ai', 'midpoint', 'manual'] as const
+export type CandidateSource = (typeof CANDIDATE_SOURCES)[number]
+
+export interface CandidateData {
+  tripId: string
+  memberIds: string[]
+  iata: string
+  city: string
+  country: string
+  why: string
+  source: CandidateSource
+  addedBy: string
+  // Aggregates written by the fare-search job (Phase 5); null until then.
+  complete: number
+  groupTotal: number | null
+  maxFare: number | null
+  minFare: number | null
+  arrivalSpreadMin: number | null
+  fitsAll: number | null
+  missingFor: string[] | null
+  lastCheckedAt: string | null
+}
+
 /** Ghost traveler ids are `ghost:<uuid>` and are never in `memberIds`. */
 export const GHOST_PREFIX = 'ghost:'
 

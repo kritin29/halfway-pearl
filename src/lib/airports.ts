@@ -1,5 +1,6 @@
 /** Airport lookup over `src/data/airports.json` (SPEC §6 addCandidate validation). */
 import airportsJson from '../data/airports.json'
+import { INPUT_LIMITS } from './limits'
 import type { Airport } from './midpoint'
 
 export const AIRPORTS: readonly Airport[] = airportsJson as Airport[]
@@ -41,4 +42,21 @@ export function searchAirports(
   }
   scored.sort((x, y) => x.score - y.score || x.a.iata.localeCompare(y.a.iata))
   return scored.slice(0, limit).map((s) => s.a)
+}
+
+/**
+ * A traveler's stored home airports, keeping only known codes: the row is
+ * client-written, so its values aren't trusted (NOTES G1). Upper-cased, no
+ * repeats, at most `homeAirportsMax`.
+ */
+export function knownHomeAirports(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  const codes: string[] = []
+  for (const v of raw) {
+    if (typeof v !== 'string') continue
+    const code = v.trim().toUpperCase()
+    if (isKnownIata(code) && !codes.includes(code)) codes.push(code)
+    if (codes.length >= INPUT_LIMITS.homeAirportsMax) break
+  }
+  return codes
 }

@@ -76,4 +76,10 @@ export const ARRIVAL_BADGE_MAX_MIN = 180
 
 /** Anthropic model + output budget for destination suggestions (endpoint defaults to Opus/4096). */
 export const AI_MODEL = 'claude-haiku-5-5'
-export const AI_MAX_TOKENS = 600
+/**
+ * Output budget, reasoning included. Haiku 5.5 thinks by default and the
+ * endpoint can't turn that off; at 600 the reasoning used the whole budget
+ * before any answer (Phase 4 real call, NOTES Q1). 2048 leaves room for both;
+ * worst case ≈ $0.001 per call at $0.50/M output tokens.
+ */
+export const AI_MAX_TOKENS = 2048

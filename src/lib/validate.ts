@@ -21,6 +21,11 @@ export function asParams(raw: unknown): Record<string, unknown> | null {
 // disguise a name in someone else's UI.
 const UNSAFE_CHARS = /[\u0000-\u001f\u007f-\u009f‪-‮⁦-⁩]/g
 
+/** Remove control/bidi characters, collapse whitespace, trim. No length rule. */
+export function cleanText(value: string): string {
+  return value.replace(UNSAFE_CHARS, ' ').replace(/\s+/g, ' ').trim()
+}
+
 /**
  * Free text: trims, removes control/bidi characters, collapses whitespace.
  * `optional` text may be missing/empty and then becomes ''.

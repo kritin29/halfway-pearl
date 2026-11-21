@@ -273,6 +273,20 @@ export const GENERIC_SEARCH_ERROR_MESSAGE = 'Something went wrong while checking
  *   - worker: { success:false, code, error, status, details } (normalizeApiError)
  */
 export function classifyIntegrationFailure(envelope: unknown): ProviderFailure {
+  const { quota, detail } = detectProviderQuota(envelope)
+  return quota
+    ? { code: 'provider_unavailable', message: PROVIDER_UNAVAILABLE_MESSAGE, detail }
+    : { code: 'error', message: GENERIC_SEARCH_ERROR_MESSAGE, detail }
+}
+
+/**
+ * The provider-agnostic half of `classifyIntegrationFailure`: is this failed
+ * envelope a provider quota / rate limit (429, "run out of searches",
+ * a rate-limit code)? Shared with AI suggestions (`src/lib/suggest.ts`) so
+ * both integrations are classified the same way; each caller supplies its
+ * own user-facing messages.
+ */
+export function detectProviderQuota(envelope: unknown): { quota: boolean; detail: string } {
   const e = isRecord(envelope) ? envelope : {}
   const text = [e.error, e.message, isRecord(e.details) ? JSON.stringify(e.details) : '']
     .filter((v): v is string => typeof v === 'string' && v.length > 0)
@@ -284,9 +298,7 @@ export function classifyIntegrationFailure(envelope: unknown): ProviderFailure {
     /\b(?:error|status|HTTP)\s*429\b/i.test(detail) ||
     e.status === 429 ||
     /rate[_ -]?limit/i.test(String(e.code ?? ''))
-  return quota
-    ? { code: 'provider_unavailable', message: PROVIDER_UNAVAILABLE_MESSAGE, detail }
-    : { code: 'error', message: GENERIC_SEARCH_ERROR_MESSAGE, detail }
+  return { quota, detail }
 }
 
 // ---------------------------------------------------------------------------
