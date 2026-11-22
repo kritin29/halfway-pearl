@@ -1,5 +1,5 @@
 /**
- * "Your private budget 🔒": the caller's OWN budgets row (SPEC §5 budgets:
+ * "Your private budget" (lock icon): the caller's OWN budgets row (SPEC §5 budgets:
  * read/update/delete 'own', admin included). The room never sends anyone
  * else's row, so `useQuery('budgets')` here can only ever contain mine.
  * Saving also sets `hasBudget = 1` on my traveler row, which is all the rest

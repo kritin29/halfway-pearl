@@ -3,8 +3,8 @@
  * clients never use `useJobs`; the job copies progress onto the trip).
  */
 import type { RecordData } from 'deepspace'
-import { AlertTriangle, CloudOff } from 'lucide-react'
-import { PROVIDER_UNAVAILABLE_MESSAGE } from '@/lib/flights'
+import { AlertTriangle } from 'lucide-react'
+import { isProviderOutage, ProviderOutage } from './ProviderOutage'
 import type { TripData } from '@/lib/types'
 
 export function SearchStatus({ trip }: { trip: RecordData<TripData> }) {
@@ -36,17 +36,8 @@ export function SearchStatus({ trip }: { trip: RecordData<TripData> }) {
   }
 
   if (!searchError) return null
-  if (searchError === PROVIDER_UNAVAILABLE_MESSAGE) {
-    return (
-      <div
-        role="alert"
-        data-testid="provider-banner"
-        className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm"
-      >
-        <CloudOff className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-        <p>{PROVIDER_UNAVAILABLE_MESSAGE}</p>
-      </div>
-    )
+  if (isProviderOutage(searchError)) {
+    return <ProviderOutage retryHint="The organizer can press Find fares again later." />
   }
   return (
     <div

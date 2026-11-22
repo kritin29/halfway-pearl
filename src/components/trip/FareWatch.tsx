@@ -19,6 +19,7 @@ import { usd } from '@/lib/results'
 import type { CandidateData, FareSnapshotData, TripData, VoteData } from '@/lib/types'
 import { dateInZone, isWatchPending, isWatchWindowOpen, selectShortlist } from '@/lib/watch'
 import { FareSparkline, type SparkPoint } from './FareSparkline'
+import { isProviderOutage, ProviderOutage } from './ProviderOutage'
 
 /** Most recent points shown in the sparkline. */
 const MAX_POINTS = 30
@@ -98,9 +99,13 @@ function FareWatchContent({ trip, me, onRetry }: { trip: RecordData<TripData>; m
         </p>
       )}
       {!pending && trip.data.watchError && (
-        <p role="status" className="rounded-md bg-muted px-3 py-2 text-sm" data-testid="watch-error">
-          {trip.data.watchError}
-        </p>
+        isProviderOutage(trip.data.watchError) ? (
+          <ProviderOutage testId="watch-error" retryHint="Prices found earlier stay as they were. You can check again later." />
+        ) : (
+          <p role="status" className="rounded-md bg-muted px-3 py-2 text-sm" data-testid="watch-error">
+            {trip.data.watchError}
+          </p>
+        )
       )}
 
       {isOrganizer && <WatchControls trip={trip} ended={ended} pending={pending} statusLine={statusLine} />}

@@ -1,6 +1,6 @@
 /** Max stops / no red-eyes / earliest departure, shared by "Your settings" and the ghost dialog. */
 import { useId } from 'react'
-import { Label, Switch } from '@/components/ui'
+import { Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Switch } from '@/components/ui'
 import { hourLabel } from '@/lib/format'
 
 export interface Constraints {
@@ -15,8 +15,10 @@ const STOP_OPTIONS = [
   { value: 2, label: 'Any number of stops' },
 ]
 
-const selectClass =
-  'h-10 w-full rounded-md border border-input bg-background px-3 text-base shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm'
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => ({
+  value: h,
+  label: h === 0 ? 'Any time' : `${hourLabel(h)} or later`,
+}))
 
 export function ConstraintFields({
   value,
@@ -31,36 +33,46 @@ export function ConstraintFields({
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor={`${id}-stops`}>Max stops</Label>
-        <select
-          id={`${id}-stops`}
-          className={selectClass}
+        <Label id={`${id}-stops-label`} htmlFor={`${id}-stops`}>
+          Max stops
+        </Label>
+        <Select
+          value={String(value.maxStops)}
           disabled={disabled}
-          value={value.maxStops}
-          onChange={(e) => onChange({ ...value, maxStops: Number(e.target.value) })}
+          onValueChange={(v) => onChange({ ...value, maxStops: Number(v) })}
         >
-          {STOP_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger id={`${id}-stops`} aria-labelledby={`${id}-stops-label`} className="bg-background">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {STOP_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={String(o.value)}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor={`${id}-hour`}>Earliest departure</Label>
-        <select
-          id={`${id}-hour`}
-          className={selectClass}
+        <Label id={`${id}-hour-label`} htmlFor={`${id}-hour`}>
+          Earliest departure
+        </Label>
+        <Select
+          value={String(value.earliestDepartHour)}
           disabled={disabled}
-          value={value.earliestDepartHour}
-          onChange={(e) => onChange({ ...value, earliestDepartHour: Number(e.target.value) })}
+          onValueChange={(v) => onChange({ ...value, earliestDepartHour: Number(v) })}
         >
-          {Array.from({ length: 24 }, (_, h) => (
-            <option key={h} value={h}>
-              {h === 0 ? 'Any time' : `${hourLabel(h)} or later`}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger id={`${id}-hour`} aria-labelledby={`${id}-hour-label`} className="bg-background">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {HOUR_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={String(o.value)}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <div className="flex items-center justify-between gap-3 sm:col-span-2">
         <Label htmlFor={`${id}-redeye`} className="flex flex-col gap-0.5">
