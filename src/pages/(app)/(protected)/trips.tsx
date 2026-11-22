@@ -6,9 +6,9 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth, useMutations, useQuery } from 'deepspace'
-import { CalendarDays, ChevronRight, Users } from 'lucide-react'
+import { CalendarDays, ChevronRight, UserPlus, Users } from 'lucide-react'
 import { Badge, Button, Input, Label, Textarea } from '@/components/ui'
-import { EmptyNote, ErrorState, LoadingState, Retryable } from '@/components/AsyncState'
+import { ErrorState, LoadingState, Retryable } from '@/components/AsyncState'
 import { useAction } from '@/hooks/useAction'
 import { isRetryable } from '@/lib/actions-client'
 import { usageDay } from '@/lib/caps'
@@ -17,12 +17,14 @@ import { INPUT_LIMITS } from '@/lib/limits'
 import { parseIdList, type TripData } from '@/lib/types'
 import { text, tripDates } from '@/lib/validate'
 import { StatusBadge } from '@/components/trip/StatusBadge'
+import { pageTitle } from '@/brand'
 
 export default function TripsPage() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-6 sm:px-6">
+      <title>{pageTitle('Your trips')}</title>
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Your trips</h1>
+        <h1 className="font-display text-3xl font-semibold tracking-tight">Your trips</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Find the best place to meet, with everyone entering their own airports and a private budget.
         </p>
@@ -43,9 +45,31 @@ function MyTrips({ onRetry }: { onRetry: () => void }) {
   }
   if (records.length === 0) {
     return (
-      <EmptyNote title="No trips yet">
-        Start one above, or open an invite link a friend sent you.
-      </EmptyNote>
+      <section
+        aria-labelledby="no-trips-heading"
+        data-testid="trips-empty"
+        className="rounded-lg border border-dashed border-border px-4 py-8 sm:px-8"
+      >
+        <h2 id="no-trips-heading" className="text-base font-semibold">
+          No trips yet
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Start one above, or open an invite link a friend sent you.
+        </p>
+        <div className="mt-5 rounded-lg bg-muted p-4" data-testid="try-solo">
+          <p className="inline-flex items-center gap-2 text-sm font-semibold">
+            <UserPlus className="h-4 w-4" aria-hidden /> Try it solo
+          </p>
+          <ol className="mt-2 flex list-decimal flex-col gap-1 pl-5 text-sm text-muted-foreground">
+            <li>Create a trip above.</li>
+            <li>
+              On its Crew tab, press <span className="font-medium text-foreground">Add traveler</span> twice to add 2
+              ghost travelers (people who don’t use the app), each with a home airport in another city.
+            </li>
+            <li>Add destinations and find fares. You’ll see voting, locking and booking end to end.</li>
+          </ol>
+        </div>
+      </section>
     )
   }
 

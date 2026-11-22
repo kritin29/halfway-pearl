@@ -13,6 +13,7 @@ import { useAction } from '@/hooks/useAction'
 import { callAction, isRetryable, type ActionResponse } from '@/lib/actions-client'
 import { dateRange } from '@/lib/format'
 import { LIMITS } from '@/lib/limits'
+import { pageTitle } from '@/brand'
 
 interface InvitePreview {
   name: string
@@ -61,7 +62,8 @@ export default function JoinPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-4 py-10">
-      <h1 className="text-2xl font-semibold tracking-tight">Join a trip</h1>
+      <title>{pageTitle('Join a trip')}</title>
+      <h1 className="font-display text-3xl font-semibold tracking-tight">Join a trip</h1>
       {preview.status === 'loading' || (preview.status !== 'error' && !preview.data) ? (
         <LoadingState label="Looking up your invite…" />
       ) : preview.status === 'error' ? (

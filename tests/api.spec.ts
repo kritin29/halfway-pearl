@@ -10,10 +10,10 @@ test.describe('API tests', () => {
   })
 
   test('WebSocket endpoint exists', async ({ page }) => {
-    // /home is a dynamic page (under src/pages/(app)/), so mounting it boots
+    // /trips is a dynamic page (under src/pages/(app)/), so mounting it boots
     // the providers and auto-connects the records WebSocket. The static
     // landing at '/' deliberately does neither — see smoke.spec.ts.
-    await page.goto('/home')
+    await page.goto('/trips')
     // Wait for the app to connect its WebSocket (it auto-connects on mount)
     await page.waitForSelector('[data-testid="app-navigation"]', { timeout: 15000 })
     // If the app loaded and connected, the WS endpoint works
@@ -114,7 +114,7 @@ test.describe('cron and job rooms', () => {
     const token = await bearerFor(alice, baseURL!)
     // Opening the app registers Alice's `users` row, so resolveAppRole gives
     // her 'member'. Without it she'd be a 'viewer' and this test would prove nothing.
-    await alice.page.goto('/home')
+    await alice.page.goto('/trips')
     await expect(alice.page.getByTestId('nav-user-name')).toHaveText(/\S/, { timeout: 15_000 })
     for (const kind of ['cron', 'jobs']) {
       const result = await probeSocket(

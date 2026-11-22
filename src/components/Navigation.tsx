@@ -1,18 +1,18 @@
 /**
- * Top nav — minimal placeholder bar wired to the app's mechanisms:
- * nav.ts-driven links (with role/dev filtering), sign-in via <AuthOverlay>,
- * and sign-out. Restyle or rebuild it freely; keep the data-testid hooks
+ * Top nav: the Halfway wordmark, nav.ts links (just "Trips"), sign-in via
+ * <AuthOverlay>, and sign-out. With one link there's no mobile menu; the
+ * link stays visible at every width. Keep the data-testid hooks
  * (`app-navigation`, `nav-sign-in-button`, `nav-user-name`, `nav-user-email`)
  * — the shipped tests rely on them. `nav-user-email` is the one that carries
  * an identity the test can check exactly: a display name is optional, the
  * email is the credential the session was opened with.
  */
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { AuthOverlay, useAuthProfileReady, signOut } from 'deepspace'
-import { ChevronDown, LogOut, Menu, X } from 'lucide-react'
-import { APP_NAME } from '../constants'
+import { ChevronDown, LogOut } from 'lucide-react'
+import { BRAND } from '../brand'
 import type { Role } from '../constants'
 import { nav } from '../nav'
 import { cn } from '../lib/utils'
@@ -31,16 +31,10 @@ import {
 export default function Navigation() {
   const { isLoaded, isSignedIn, user, userLoading } = useAuthProfileReady({ requireUser: true })
   const location = useLocation()
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
 
   const profileReady = !isSignedIn || (!userLoading && !!user)
   const userRole = (user?.role ?? 'anonymous') as Role | 'anonymous'
-
-  // Close the mobile menu when navigating
-  useEffect(() => {
-    setMobileMenuOpen(false)
-  }, [location.pathname])
 
   const visibleNav = nav.filter((item) => {
     if (item.devOnly && !import.meta.env.DEV) return false
@@ -51,15 +45,18 @@ export default function Navigation() {
   })
 
   const navLink = (item: (typeof nav)[number]) => {
-    const active = location.pathname.startsWith(item.path)
+    // A trip page (/t/…) or invite (/join/…) lives under "Trips".
+    const active =
+      location.pathname.startsWith(item.path) ||
+      (item.path === '/trips' && /^\/(t|join)\//.test(location.pathname))
     return (
       <Link
         key={item.path}
         to={item.path}
         aria-current={active ? 'page' : undefined}
         className={cn(
-          'px-3 py-1.5 text-sm',
-          active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+          'rounded-md px-3 py-1.5 text-sm font-medium',
+          active ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground',
         )}
       >
         {item.label}
@@ -69,20 +66,26 @@ export default function Navigation() {
 
   return (
     <>
-      <nav data-testid="app-navigation" className="border-b border-border bg-background">
-        <div className="mx-auto flex h-12 max-w-7xl items-center gap-4 px-4">
-          <Link to="/home" className="text-sm font-semibold text-foreground">
-            {APP_NAME}
+      <nav data-testid="app-navigation" aria-label="Main" className="border-b border-border bg-background">
+        <div className="mx-auto flex h-14 max-w-5xl items-center gap-2 px-4 sm:gap-4 sm:px-6">
+          <Link to="/trips" className="mr-1 inline-flex items-center gap-2 text-foreground" aria-label={`${BRAND}, your trips`}>
+            <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden>
+              <path d="M2 20 Q7 9 12 11" className="fill-none stroke-foreground" strokeWidth={1.6} strokeDasharray="2 2" />
+              <path d="M22 20 Q17 9 12 11" className="fill-none stroke-foreground" strokeWidth={1.6} strokeDasharray="2 2" />
+              <circle cx={12} cy={9} r={4} className="fill-primary" />
+              <circle cx={12} cy={9} r={1.4} className="fill-background" />
+            </svg>
+            <span className="font-display text-lg font-semibold tracking-tight">{BRAND}</span>
           </Link>
 
-          <div className="hidden items-center md:flex">{visibleNav.map(navLink)}</div>
+          <div className="flex items-center">{visibleNav.map(navLink)}</div>
 
           <div className="flex-1" />
 
           {!isLoaded ? null : isSignedIn && !profileReady ? (
             /* Signed in, profile still loading — skeleton pill, never the
                Sign in button (that would offer sign-in to a signed-in user). */
-            <div className="flex items-center gap-2 rounded-full border border-border bg-card/60 py-1 pl-1 pr-2.5">
+            <div className="flex items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-2.5">
               <div className="h-6 w-6 animate-pulse rounded-full bg-muted" />
               <div className="hidden h-4 w-20 animate-pulse rounded-md bg-muted sm:block" />
             </div>
@@ -92,7 +95,7 @@ export default function Navigation() {
                 render={
                   <button
                     aria-label="Account menu"
-                    className="group flex items-center gap-2 rounded-full border border-border bg-card/60 py-1 pl-1 pr-2.5 text-sm transition-colors hover:bg-card"
+                    className="group flex items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-2.5 text-sm transition-colors hover:bg-accent"
                   >
                     <Avatar className="h-6 w-6 ring-1 ring-inset ring-border">
                       <AvatarImage src={user.imageUrl ?? undefined} referrerPolicy="no-referrer" />
@@ -136,27 +139,12 @@ export default function Navigation() {
             <button
               data-testid="nav-sign-in-button"
               onClick={() => setShowAuthModal(true)}
-              className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+              className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
             >
               Sign in
             </button>
           )}
-
-          <button
-            className="inline-flex h-8 w-8 items-center justify-center text-muted-foreground hover:text-foreground md:hidden"
-            onClick={() => setMobileMenuOpen((prev) => !prev)}
-            aria-label="Toggle menu"
-            aria-expanded={mobileMenuOpen}
-          >
-            {mobileMenuOpen ? <X className="h-4 w-4" aria-hidden /> : <Menu className="h-4 w-4" aria-hidden />}
-          </button>
         </div>
-
-        {mobileMenuOpen && (
-          <div className="flex flex-col border-t border-border px-2 py-2 md:hidden">
-            {visibleNav.map(navLink)}
-          </div>
-        )}
       </nav>
 
       {showAuthModal && <AuthOverlay onClose={() => setShowAuthModal(false)} />}

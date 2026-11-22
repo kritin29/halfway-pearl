@@ -21,20 +21,28 @@ import { DeepSpaceAuthProvider, useAuthStatus } from 'deepspace'
 import { RecordProvider, RecordScope, AgentTools } from 'deepspace'
 import Navigation from '../../components/Navigation'
 import { useToast } from '@/components/ui'
-import { APP_NAME, SCOPE_ID } from '../../constants'
+import { SCOPE_ID } from '../../constants'
+import { BRAND } from '../../brand'
 import { schemas } from '../../schemas'
 
 export default function AppLayout() {
   return (
     <DeepSpaceAuthProvider>
-      {/* The prerendered landing owns the document <title> and React drops it
-          when <Seo> unmounts, so every route without <Seo> sets its own. */}
-      <title>{APP_NAME}</title>
+      {/* No <title> here: every page renders its own ("Your trips · Halfway",
+          the trip's name, …). Two at once would leave the tab showing
+          whichever React inserted first. Fallbacks below carry the brand. */}
       <AuthBoot>
         <div className="flex h-screen flex-col bg-background overflow-hidden">
           <Navigation />
           <main className="flex-1 overflow-y-auto min-h-0">
-            <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground">Loading...</div>}>
+            <Suspense
+              fallback={
+                <div className="flex h-full items-center justify-center text-muted-foreground">
+                  <title>{BRAND}</title>
+                  Loading…
+                </div>
+              }
+            >
               <Outlet />
             </Suspense>
           </main>
@@ -62,7 +70,11 @@ function AuthBoot({ children }: { children: ReactNode }) {
   const { error, warning } = useToast()
 
   if (!isLoaded) {
-    return <div aria-busy="true" className="fixed inset-0 bg-background" />
+    return (
+      <div aria-busy="true" className="fixed inset-0 bg-background">
+        <title>{BRAND}</title>
+      </div>
+    )
   }
 
   return (

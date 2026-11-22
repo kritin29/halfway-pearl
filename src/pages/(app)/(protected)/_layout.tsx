@@ -17,6 +17,7 @@ import { useState } from 'react'
 import { Link, Outlet } from 'react-router-dom'
 import { AuthGate, AuthOverlay } from 'deepspace'
 import { Button } from '@/components/ui'
+import { pageTitle } from '@/brand'
 
 export default function ProtectedLayout() {
   return (
@@ -31,10 +32,11 @@ function SignedOutPanel() {
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-6 py-20">
+      <title>{pageTitle('Sign in')}</title>
       <div className="w-full max-w-sm rounded-lg border border-border bg-card p-8 text-center">
-        <h1 className="text-lg font-semibold text-foreground">Sign in to continue</h1>
+        <h1 className="font-display text-2xl font-semibold text-foreground">Sign in to plan together</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          This page is only available to signed-in users.
+          Your trips, invites and fares are only visible to the people on each trip.
         </p>
         <Button className="mt-6 w-full" onClick={() => setShowAuthModal(true)}>
           Sign in
@@ -43,7 +45,7 @@ function SignedOutPanel() {
           to="/"
           className="mt-4 inline-block text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
         >
-          Back to home
+          What is Halfway?
         </Link>
       </div>
 

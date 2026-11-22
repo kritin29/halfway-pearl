@@ -34,9 +34,9 @@ test.skip(
 test('each browser renders its own signed-in account', async ({ users }) => {
   const [a, b] = await users(2)
 
-  // /home is dynamic (under src/pages/(app)/), so it mounts the nav shell;
+  // /trips is dynamic (under src/pages/(app)/), so it mounts the nav shell;
   // '/' is the static landing and has no navigation.
-  await Promise.all([a.page.goto('/home'), b.page.goto('/home')])
+  await Promise.all([a.page.goto('/trips'), b.page.goto('/trips')])
 
   // Email, not name. The page renders the *session's* `name || email`, while
   // `user.name` here comes from the LOCAL account registry — and the two are
@@ -62,72 +62,37 @@ test('each browser renders its own signed-in account', async ({ users }) => {
   }
 })
 
-test('API status page renders loading success and error states', async ({ users }) => {
+/**
+ * CLAUDE.md: a failed resource shows error-with-retry and never reloads the
+ * page. The invite preview (`previewInvite` through useAsyncResource) is a
+ * real Halfway resource: fail it at the network boundary, retry, and check
+ * the page recovered in place (same URL, a window marker survives).
+ */
+test('a failed invite lookup offers a retry that recovers without a page reload', async ({ users }) => {
   const [user] = await users(1)
-  let shouldFail = false
-  let requestCount = 0
-
-  await user.page.route('**/api/integrations', async (route) => {
-    requestCount += 1
-    if (shouldFail) {
-      await route.fulfill({
-        status: 502,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: false, error: 'Catalog unavailable' }),
-      })
-      return
+  let failing = true
+  let calls = 0
+  await user.page.route('**/api/actions/previewInvite', async (route) => {
+    calls += 1
+    if (failing) {
+      // A gateway error page: the client classifies it as a retryable server_error.
+      await route.fulfill({ status: 502, contentType: 'text/plain', body: 'Bad gateway' })
+    } else {
+      await route.fallback()
     }
-
-    await new Promise((resolve) => setTimeout(resolve, 100))
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ success: true, data: { integrations: { openai: {}, wikipedia: {} } } }),
-    })
   })
 
-  await user.page.goto('/api-status')
-  await expect(user.page.getByText('Loading integration catalog...')).toBeVisible()
-  await expect(user.page.getByText('Integration catalog ready')).toBeVisible()
-  await expect(user.page.getByText('2 integrations available.')).toBeVisible()
+  await user.page.goto('/join/nosuchcode123')
+  await expect(user.page.getByText('Could not load this invite')).toBeVisible({ timeout: 15_000 })
+  await user.page.evaluate(() => ((window as unknown as { __noReload: number }).__noReload = 1))
+  const url = user.page.url()
 
-  shouldFail = true
-  await user.page.getByRole('button', { name: 'Refresh' }).click()
-  await expect(user.page.getByText('Catalog unavailable')).toBeVisible()
-  await expect(user.page.getByText('Showing the last loaded catalog')).toBeVisible()
-  await expect(user.page.getByText('Integration catalog ready')).toBeVisible()
-
-  const urlAfterFailure = user.page.url()
-  const requestsAfterFailure = requestCount
-  await user.page.getByRole('button', { name: 'Refresh' }).click()
-  await expect.poll(() => requestCount).toBeGreaterThan(requestsAfterFailure)
-  expect(user.page.url()).toBe(urlAfterFailure)
-})
-
-test('API status page shows local retry after first-load API failure', async ({ users }) => {
-  const [user] = await users(1)
-  let requestCount = 0
-
-  await user.page.route('**/api/integrations', async (route) => {
-    requestCount += 1
-    await route.fulfill({
-      status: 502,
-      contentType: 'application/json',
-      body: JSON.stringify({ success: false, error: 'Catalog unavailable' }),
-    })
-  })
-
-  await user.page.goto('/api-status')
-  await expect(user.page.getByText('Loading integration catalog...')).toBeVisible()
-  await expect(user.page.getByText('Could not load API data')).toBeVisible()
-  await expect(user.page.getByText('Retried 1 time automatically.')).toBeVisible()
-
-  const retryButton = user.page.getByRole('button', { name: 'Retry' })
-  await expect(retryButton).toBeVisible()
-
-  const urlAfterFailure = user.page.url()
-  const requestsAfterFailure = requestCount
-  await retryButton.click()
-  await expect.poll(() => requestCount).toBeGreaterThan(requestsAfterFailure)
-  expect(user.page.url()).toBe(urlAfterFailure)
+  failing = false
+  const before = calls
+  await user.page.getByRole('button', { name: 'Try again' }).click()
+  // The real answer for a code that doesn't exist.
+  await expect(user.page.getByTestId('join-error')).toContainText('That invite link doesn’t match a trip')
+  expect(calls).toBeGreaterThan(before)
+  expect(user.page.url()).toBe(url)
+  expect(await user.page.evaluate(() => (window as unknown as { __noReload?: number }).__noReload)).toBe(1)
 })
