@@ -93,6 +93,12 @@
 
   /* Animations */
   --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
+
+  /* Type: Inter for reading, Fraunces for headings (font-display),
+     IBM Plex Mono for airport codes and fares (font-mono). Loaded in index.html. */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Fraunces', ui-serif, Georgia, serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
 }
 
 /* Theme override blocks live in `themes.css` — imported above. */
@@ -164,7 +170,7 @@
   }
 
   body {
-    font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-sans);
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -198,37 +204,61 @@
   }
 
   /*
-   * Focus indication is intentionally NOT applied app-wide via a
-   * `*:focus-visible` rule. Doing so paints a colored outline onto
-   * every focusable element on the page — including programmatically
-   * focusable containers like Radix DismissableLayer wrappers,
-   * dialog overlays, and any element with `tabindex={-1}` used for
-   * scroll containment. The result reads as "the entire panel /
-   * dialog is selected" the moment a child button is clicked.
-   *
-   * Per-component focus indicators (e.g. shadcn's
-   * `focus-visible:ring-1` on Button, `focus-visible:border-ring` on
-   * Input / Textarea / Select) are sufficient for keyboard
-   * accessibility and don't bleed onto containers.
-   *
-   * If you DO need a global indicator for very keyboard-heavy apps,
-   * scope it tightly — e.g. only to interactive elements:
-   *
-   *   a:focus-visible,
-   *   button:focus-visible,
-   *   [role="button"]:focus-visible,
-   *   input:focus-visible,
-   *   select:focus-visible,
-   *   textarea:focus-visible {
-   *     outline: 2px solid var(--color-primary);
-   *     outline-offset: 2px;
-   *   }
-   *
-   * — never `*`.
+   * Visible keyboard focus, scoped to interactive elements only (never `*`,
+   * which would outline dialog wrappers and scroll containers). Primitives
+   * with their own focus ring keep it; this covers links, raw buttons and
+   * anything else a keyboard can reach.
    */
+  a:focus-visible,
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  [role="tab"]:focus-visible,
+  [role="switch"]:focus-visible,
+  [role="checkbox"]:focus-visible,
+  [role="combobox"]:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
 
   /* Prevent 300ms tap delay on mobile */
   a, button, [role="button"], input, select, textarea {
     touch-action: manipulation;
   }
+}
+
+/*
+ * Landing page motion (src/pages/index.tsx). CSS keyframes, not JS, so the
+ * prerendered HTML already shows the final state: everything below only runs
+ * for visitors who haven't asked for reduced motion, and runs once.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .route-draw {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: route-draw 1.4s cubic-bezier(0.45, 0, 0.2, 1) forwards;
+  }
+  .route-fade {
+    opacity: 0;
+    animation: route-fade 0.5s ease-out forwards;
+  }
+  .route-pin {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+    opacity: 0;
+    animation: route-pin 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.2) forwards;
+  }
+}
+
+@keyframes route-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes route-fade {
+  to { opacity: 1; }
+}
+
+@keyframes route-pin {
+  from { opacity: 0; transform: translateY(-10px) scale(0.6); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }

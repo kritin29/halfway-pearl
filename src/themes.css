@@ -1,46 +1,54 @@
 /*
  * Theme overrides — applied via <html data-theme="<id>">.
  *
- * Default values live in `styles.css` (@theme block, slate — a neutral
- * placeholder, not a design choice). Every app should define its OWN theme
- * before first deploy: copy the example block below, rename the selector,
- * and set colors that fit the product. Shape comes from `--radius`.
- *
- * To add a theme:
- *   1. Add a `[data-theme="my-id"] { ... }` block overriding the shadcn
- *      tokens below. If the theme is light, include `color-scheme: light;`
- *      so native form controls (calendar icons, scrollbars) match.
- *   2. Add an entry to `src/themes.ts` so it shows up in the typed catalog.
- *   3. Add the theme's --color-background to the first-paint <style> block
- *      in index.html so the pre-CSS frame matches (no white flash).
- *   4. Switch to it via `data-theme` on <html> in index.html.
+ * The baseline @theme block in styles.css is the scaffold's neutral default;
+ * Halfway's own theme below overrides every token it uses. To add another
+ * theme: add a `[data-theme="<id>"]` block here, an entry in src/themes.ts,
+ * and its background in index.html's first-paint <style>.
  */
 
-/* Paper — light example theme; shows the full token contract incl.
- * `color-scheme: light`. Replace or delete it once the app has its own. */
-[data-theme="paper"] {
+/*
+ * Halfway — "a paper route map on a corkboard".
+ * Warm paper background, navy ink text, one vermilion accent (the pin where
+ * routes meet) reserved for primary actions and the meeting point.
+ * Contrast (WCAG): ink on paper 13.8:1, muted text on paper 5.3:1 and on
+ * muted 4.8:1, white on vermilion 5.6:1, vermilion on paper 4.9:1, white on
+ * each status color ≥ 6:1, input borders ≥ 3:1 against card and paper.
+ */
+[data-theme="halfway"] {
   color-scheme: light;
-  --color-background: #ffffff;
-  --color-foreground: #0a0a0a;
-  --color-card: #fafafa;
-  --color-card-foreground: #0a0a0a;
-  --color-popover: #ffffff;
-  --color-popover-foreground: #0a0a0a;
-  --color-primary: #171717;
+  --color-background: #f5f0e6;
+  --color-foreground: #1c2430;
+  --color-card: #fffdf8;
+  --color-card-foreground: #1c2430;
+  --color-popover: #fffdf8;
+  --color-popover-foreground: #1c2430;
+  --color-primary: #b4441e;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #f5f5f5;
-  --color-secondary-foreground: #0a0a0a;
-  --color-muted: #f5f5f5;
-  --color-muted-foreground: #525252;
-  --color-accent: #e5e5e5;
-  --color-accent-foreground: #0a0a0a;
-  --color-destructive: #dc2626;
+  --color-secondary: #ebe4d6;
+  --color-secondary-foreground: #1c2430;
+  --color-muted: #ece6da;
+  --color-muted-foreground: #5b6472;
+  --color-accent: #e6dfd0;
+  --color-accent-foreground: #1c2430;
+  --color-destructive: #b42318;
   --color-destructive-foreground: #ffffff;
-  --color-border: #e5e5e5;
-  --color-input: #e5e5e5;
-  --color-ring: #171717;
-  --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.016);
-  --shadow-card-hover: 0 2px 8px 0 rgba(0, 0, 0, 0.032);
-  --color-shell: #fafafa;
-  --color-shell-panel: #ffffff;
+  --color-border: #d9d0bf;
+  --color-input: #7d725e;
+  --color-ring: #b4441e;
+  --radius: 0.5rem;
+
+  /* Status colors, darkened from the scaffold's so white text on them passes
+     4.5:1 (the scaffold's #10b981 / #f59e0b with white text did not). */
+  --color-success: #1d7046;
+  --color-success-foreground: #ffffff;
+  --color-warning: #8f5300;
+  --color-warning-foreground: #ffffff;
+  --color-info: #1f5f99;
+  --color-info-foreground: #ffffff;
+
+  --shadow-card: 0 1px 2px 0 rgba(28, 36, 48, 0.06);
+  --shadow-card-hover: 0 2px 8px 0 rgba(28, 36, 48, 0.08);
+  --color-shell: #efe9dd;
+  --color-shell-panel: #fffdf8;
 }
