@@ -17,6 +17,8 @@ import { DestinationsTab } from '@/components/trip/DestinationsTab'
 import { BookTab } from '@/components/trip/BookTab'
 import { ResultsTab } from '@/components/trip/ResultsTab'
 import { StatusBadge } from '@/components/trip/StatusBadge'
+import { NextStepGuide } from '@/components/trip/NextStepGuide'
+import { pageTitle } from '@/brand'
 import { dateRange } from '@/lib/format'
 import type { TripData } from '@/lib/types'
 import { recordId } from '@/lib/validate'
@@ -48,7 +50,14 @@ function Trip({ tripId, onRetry }: { tripId: string; onRetry: () => void }) {
   const [tab, setTab] = useState<string | null>(null)
 
   if (status === 'loading') return <LoadingState label="Loading trip…" />
-  if (status === 'error') return <ErrorState title="Could not load this trip" message={error} onRetry={onRetry} />
+  if (status === 'error') {
+    return (
+      <>
+        <title>{pageTitle('Trip')}</title>
+        <ErrorState title="Could not load this trip" message={error} onRetry={onRetry} />
+      </>
+    )
+  }
   if (!trip || !userId) return <TripNotFound />
   const tripStatus = trip.data.status
   const locked = tripStatus === 'locked'
@@ -59,9 +68,10 @@ function Trip({ tripId, onRetry }: { tripId: string; onRetry: () => void }) {
 
   return (
     <>
+      <title>{pageTitle(trip.data.name)}</title>
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight" data-testid="trip-name">
+          <h1 className="font-display text-3xl font-semibold tracking-tight" data-testid="trip-name">
             {trip.data.name}
           </h1>
           <StatusBadge status={trip.data.status} />
@@ -73,11 +83,13 @@ function Trip({ tripId, onRetry }: { tripId: string; onRetry: () => void }) {
         {trip.data.vibe && <p className="text-sm text-muted-foreground">“{trip.data.vibe}”</p>}
       </header>
 
+      <NextStepGuide trip={trip} me={userId} onGoTo={(t) => setTab(t)} />
+
       <Tabs
         value={current}
         onValueChange={(v) => setTab(String(v))}
       >
-        <TabsList className="w-full sm:w-fit">
+        <TabsList className="w-full sm:w-fit" aria-label="Trip sections">
           <TabsTrigger value="crew">Crew</TabsTrigger>
           <TabsTrigger value="destinations">Destinations</TabsTrigger>
           <TabsTrigger value="results">Results</TabsTrigger>
@@ -110,6 +122,7 @@ function Trip({ tripId, onRetry }: { tripId: string; onRetry: () => void }) {
 function TripNotFound() {
   return (
     <div data-testid="trip-not-found">
+      <title>{pageTitle('Trip not found')}</title>
       <EmptyNote title="Trip not found">
         It may not exist, or you’re not on it. Ask the organizer for an invite link.{' '}
         <Link to="/trips" className="underline underline-offset-4">
