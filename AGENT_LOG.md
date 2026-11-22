@@ -283,3 +283,36 @@ LIVE GET /api/debug/records -> HTTP 404 404 Not Found
 - `flights.ts` still unverified against a real SerpApi response (R7).
 **I verified myself (how):**
 - …
+
+## Phase 8 — Polish and README — Sun Nov 22
+Rulings recorded: Phase 7 W0–W9 approved (SPEC #48). No business logic, schemas, permissions, caps or jobs changed.
+**Agent (Claude Code) did:**
+- Read the DeepSpace design pages (overview, direction, style tile, patterns, anti-AI gate, product polish, worked examples) and wrote the Design Direction block at the top of `src/pages/index.tsx`.
+- Theme `halfway` (`src/themes.css`, light): warm paper, navy ink, one vermilion accent. Every text pair checked ≥ 4.5:1; status colors darkened because white on the scaffold's green/amber was ~2.5:1. Fonts: Fraunces (headings), Inter (body), IBM Plex Mono (codes/fares) from Google Fonts. Scaffold slate/paper themes removed.
+- Landing (static, no data hooks, prerendered): 5-word headline, a route map where three dashed routes draw once and meet at a pin (CSS keyframes, off under reduced motion), a 3-step "how it works" on an itinerary line, the three differentiators as alternating rows with small code-drawn visuals, a contrast CTA band with the solo hint, and a mono footer. Design gate: no hex/rgb/named colors, no foreground opacity, no emoji, no loops, no placeholder copy.
+- Nav: Halfway wordmark + "Trips" (highlighted on trip and invite pages too) + sign in/out; the mobile menu went away with only one link. Deleted `settings.tsx` and `api-status.tsx`; `/home` now forwards to `/trips` (the sign-in callback still lands on `/home`, so the route stays).
+- `/trips` empty state with a "Try it solo" hint (create a trip, press Add traveler twice for ghosts).
+- Trip page "next step" guide: pure `src/lib/next-step.ts` (11 unit tests) + `NextStepGuide.tsx` (six-stop progress line, one card, a button that switches tab). Renders nothing while its queries load or fail; the tabs already show those states.
+- Provider outage: shared `ProviderOutage` banner keeps the stored sentence and adds what it means in plain words and that the rest of the trip still works; also used when a watch run's `watchError` is the outage.
+- Titles on every page ("Your trips · Halfway", the trip's name, "Join a trip · Halfway", "Sign in · Halfway", "Page not found · Halfway"); the layout-wide slug title is gone. SVG + matching 32px ICO favicon. Friendly static 404.
+- Accessibility: visible focus outline scoped to links/buttons/tabs/switches/comboboxes; raw `<select>`s in the constraint fields replaced with the kit's `Select` (labelled; found by its label in Playwright); `aria-label` on the nav and tab list. Tabs keep Base UI's arrow-key handling.
+- Phone pass at 390px (headless Chromium, throwaway spec, deleted): landing, 404, signed-out, trips, new trip, crew, destinations, searching, results, book before/after lock, join, ghost dialog with an open select. Fixed from the screenshots: a fare tag sitting on the SEA dot; "Trips" not highlighted on trip pages.
+- Tests: `smoke.spec.ts` rewritten for the real landing, nav, `/home` redirect, signed-out title, 404, favicon. `api.spec.ts` and `collab.spec.ts` use `/trips` instead of `/home`. The two scaffold API-status tests were replaced by an e2e that fails the invite lookup at the network, retries, and proves the page didn't reload. New `tests/guide.spec.ts` walks the solo path (organizer + 2 ghosts) through all six guide stages.
+- README.md: what/why (MeetPoint, Kayak Rendezvous, the coordination gap), features, usage, architecture (rooms, collections and readers, actions, job, cron, integrations), integrations used and left out, privacy model, spend caps with costs, test suites, run/deploy, known limitations, what's next.
+- Results: unit 24 files / 396 passed; `test run` (smoke+api) 39 passed, incl. the one real AI call and the one real `email/send` (`sent: 1`); `test run e2e --grep "^(?!.*one real).*$"` 53 passed (second run; see below); tsc 0; eslint 0; `vite build` prerenders `/` with the real title. Real calls this phase: 1 anthropic, 1 email/send, 0 SerpApi (plus the screenshot runs, which used fixtures and mocked emails only).
+**What broke / surprised me:**
+- First e2e run: 52 passed, 1 failed. The landing's title test waited the default 5s for the page while ~50 tests ran in parallel against the dev server; it passed alone and in the smoke run. Gave the landing checks the same 15s the other app-shell waits use; the re-run passed 53/53. I didn't re-run smoke+api after that timeout-only change, to avoid another round of real calls.
+- Full-page screenshots clip because the app scrolls inside `main`; re-shot with a tall viewport.
+- A join screenshot came out blank: the cold auth check hadn't finished after 1.5s. Waiting for the heading showed the page fine.
+**Decisions & tradeoffs (please confirm):**
+- `/home` kept as a redirect instead of changing the sign-in callback in `http-routes.ts` (avoids touching server code this phase).
+- Google Fonts adds a third-party request from visitors' browsers (noted in the README). Self-hosting would mean new font packages.
+- The guide's "Bring in the group" step uses the same "2 travelers with airports" threshold as `startSearch`.
+- `BRAND`/`pageTitle` live in `src/brand.ts` (no SDK import) so the static landing and 404 stay off the SDK chunk; `APP_NAME` is still the slug.
+**Unsure about:**
+- The `/trips` empty state wasn't screenshotted: both pool accounts already have trips. It's simple markup, but unseen.
+- The outage banner wasn't seen in a browser (the fixture seam can't produce a provider outage); its condition is the same string match as before.
+- Contrast was computed for the theme tokens, not audited per screen; the old `Switch` disabled-style issue from Phase 6 is still handled locally.
+- 390px checked in headless Chromium only.
+**I verified myself (how):**
+- …

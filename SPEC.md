@@ -237,10 +237,10 @@ Arming: the scaffold's `armCronRoom` middleware and deploy's own wake-up request
 
 ## 10. Screens (mobile-first)
 
-- `/` landing (static; no data hooks): pitch, "Start a trip", 3-step explainer.
-- `/trips` (protected): my trips + create form.
+- `/` landing (static; no data hooks): pitch, "Start a trip", 3-step explainer, the three differentiators (private budgets, daily fare watch, arrival alignment).
+- `/trips` (protected): my trips + create form; with no trips, a "Try it solo" hint (create a trip, add 2 ghost travelers). `/home` forwards here (the sign-in callback lands on `/home`). Nav: Trips + sign in/out.
 - `/join/:code` (protected): join confirmation.
-- `/t/:tripId` (protected) — tabs:
+- `/t/:tripId` (protected) — a "next step" guide on top (airports → destinations → fares → vote → lock → book; `src/lib/next-step.ts`), then tabs:
   - **Crew**: members & ghosts, each with airports and chips "constraints ✓", "budget set ✓". "Your settings" panel: airports, stops, red-eye, earliest hour, and **"Your private budget 🔒 Only you can see this."** Invite link copy button.
   - **Destinations**: candidate list, "Suggest with AI", "Add geographic middle", search-add input, "Find fares" button with live job progress.
   - **Results**: sort tabs, cards (see §3.6), per-person fare breakdown, your private fit line, vote button + tally.
@@ -354,3 +354,11 @@ Hotels total (`serpapi/hotels`), flexible dates (±1 day), MapLibre map of origi
 | 26 | AI `max_tokens` 600 → 2048: Haiku 5.5 reasons by default (the endpoint can't turn it off) and the real call at 600 spent the whole budget on reasoning. Real call at 2048: 974 output tokens (542 reasoning), $0.00053 | §4, §6 suggestCandidates, `src/lib/limits.ts` | developer decision after NOTES Q1 |
 | 27 | Destination actions spelled out: error codes, frozen while searching/locked, post-write max check, `removeCandidate` also deletes fareSnapshots, midpoint skips home airports and fills free slots only | §6 | Phase 4 build |
 | 28 | Dev/test-only seams: `__test-` trips skip the AI cap, `suggestCandidates` returns `debug` (both need `ALLOW_DEBUG_ROUTES === 'true'`) | §6 | Phase 4 build (NOTES Q3) |
+
+### 2026-11-22 — Phase 8 (polish and README)
+| # | Change | Where in this spec | From |
+|---|---|---|---|
+| 48 | Phase 7 decisions W0–W9 approved as described | §6, §8, §9, §10 | developer ruling |
+| 49 | Landing content (pitch, how it works, three differentiators), `/trips` "Try it solo" hint, nav = Trips + sign in/out, scaffold `/settings` and `/api-status` removed, `/home` forwards to `/trips` | §10 | developer brief |
+| 50 | Trip page "next step" guide (display only; every rule is still enforced by the actions) | §10 | developer brief |
+| 51 | Provider-outage banner explains the outage in plain words under the stored message (SPEC #32 wording unchanged); also used for a watch run's `watchError` | §7 Integration failures, §10 | developer brief |
