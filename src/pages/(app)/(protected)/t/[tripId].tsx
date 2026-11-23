@@ -31,16 +31,16 @@ import { recordId } from '@/lib/validate'
  * the sliding indicator, so where you are is obvious at a glance.
  */
 const SECTIONS: Array<{ value: TripTab; label: string; Icon: LucideIcon; active: string; indicator: string }> = [
-  { value: 'crew', label: 'Crew', Icon: Users, active: 'data-[active]:text-info-ink', indicator: 'ring-info/30' },
+  { value: 'crew', label: 'Crew', Icon: Users, active: 'data-[active]:text-info-ink', indicator: 'ring-info/35' },
   {
     value: 'destinations',
     label: 'Destinations',
     Icon: MapPinned,
-    active: 'data-[active]:text-accent-foreground',
-    indicator: 'ring-primary/30',
+    active: 'data-[active]:text-warning-ink',
+    indicator: 'ring-sun/60',
   },
-  { value: 'results', label: 'Results', Icon: Trophy, active: 'data-[active]:text-coral-ink', indicator: 'ring-coral/40' },
-  { value: 'book', label: 'Book', Icon: Ticket, active: 'data-[active]:text-success-ink', indicator: 'ring-success/30' },
+  { value: 'results', label: 'Results', Icon: Trophy, active: 'data-[active]:text-coral-ink', indicator: 'ring-coral/45' },
+  { value: 'book', label: 'Book', Icon: Ticket, active: 'data-[active]:text-success-ink', indicator: 'ring-success/35' },
 ]
 
 export default function TripPage() {
@@ -100,7 +100,7 @@ function Trip({ tripId, onRetry }: { tripId: string; onRetry: () => void }) {
   return (
     <>
       <title>{pageTitle(trip.data.name)}</title>
-      <header className="relative isolate overflow-hidden rounded-2xl bg-gradient-to-br from-nav via-[#2a1f7a] to-primary px-5 py-6 text-nav-foreground shadow-[0_18px_40px_-20px_rgba(43,31,122,0.7)] sm:px-7 sm:py-7">
+      <header className="relative isolate overflow-hidden rounded-xl border-b-4 border-coral bg-primary px-5 py-6 text-nav-foreground shadow-[0_6px_18px_-10px_rgba(28,39,51,0.5)] sm:px-7 sm:py-7">
         <HeaderRoutes />
         <div className="flex flex-wrap items-center gap-2.5">
           <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl" data-testid="trip-name">
@@ -176,13 +176,13 @@ function HeaderRoutes() {
   return (
     <svg
       viewBox="0 0 320 120"
-      className="pointer-events-none absolute -top-2 right-4 -z-10 hidden h-[150%] w-auto opacity-40 sm:block"
+      className="pointer-events-none absolute -top-2 right-4 -z-10 hidden h-[150%] w-auto sm:block"
       aria-hidden
     >
-      <path d="M10 110 Q90 20 200 52" fill="none" stroke="white" strokeWidth={2} strokeDasharray="5 7" />
-      <path d="M310 112 Q260 40 200 52" fill="none" stroke="white" strokeWidth={2} strokeDasharray="5 7" />
+      <path d="M10 110 Q90 20 200 52" fill="none" stroke="white" strokeOpacity={0.35} strokeWidth={2} strokeDasharray="5 7" />
+      <path d="M310 112 Q260 40 200 52" fill="none" stroke="white" strokeOpacity={0.35} strokeWidth={2} strokeDasharray="5 7" />
       <circle cx={200} cy={44} r={11} className="fill-coral" />
-      <circle cx={200} cy={44} r={4} className="fill-nav" />
+      <circle cx={200} cy={44} r={4} className="fill-primary" />
     </svg>
   )
 }

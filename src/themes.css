@@ -8,70 +8,76 @@
  */
 
 /*
- * Halfway "Dusk": a flight at golden hour.
- * Lavender-mist page, white cards, deep indigo ink. Iris violet is the one
- * action color (buttons, selected tabs, focus). Coral is the brand pin
- * (where routes meet) and the Results section; sun yellow is the highlight
- * for the top pick and the demo label. Each trip section has its own hue so
- * you always know where you are: Crew = sky, Destinations = iris,
- * Results = coral, Book = green.
+ * Halfway "Timetable": a mid-century airline poster.
+ * Oat paper, navy ink, and four earth hues of matching strength (terracotta,
+ * ochre, pine, slate). One family, flat fills, no gradients, no glows.
  *
- * Contrast (WCAG, checked): ink on page 15.6:1; muted text on page 6.0:1,
- * on white 6.7:1, on muted 5.8:1; white on iris 6.1:1; iris on page 5.5:1;
- * white on success 5.3, warning 5.1, info 5.8, destructive 5.5, coral-ink
- * 6.6, berry 6.3; every *-ink text color on its own 12% tint ≥ 4.6:1; input border on
- * white 3.5:1; ink on sun 11:1; nav text on nav 17:1.
+ * Roles:
+ *   navy       actions (buttons, selected tabs, focus) and the nav bar
+ *   terracotta the brand pin, Results, "needs attention"
+ *   ochre      highlights: #1 pick, the demo label
+ *   pine       done: booked, voted, locked, Book
+ *   slate      Crew and neutral info
+ *   plum       one more avatar color only
+ * Token names (coral, sun, berry …) are kept from the earlier theme so the
+ * components don't change; coral = terracotta, sun = ochre, berry = plum.
+ *
+ * Contrast (WCAG, checked): ink on paper 13.4:1; muted text on paper 5.3,
+ * on card 5.9, on muted 4.8; white on navy 11.2, pine 6.3, slate 6.1,
+ * terracotta-ink 6.1, rust 5.4, red 6.7, plum 6.8; ink on ochre 6.8 and on
+ * ochre-soft 12.7; each *-ink on its own 12% tint ≥ 4.7; nav text 8.2;
+ * input border on card 4.1. Text never sits on the light terracotta fill.
  */
 [data-theme="halfway"] {
   color-scheme: light;
-  --color-background: #f4f2fb;
-  --color-foreground: #1a1636;
-  --color-card: #ffffff;
-  --color-card-foreground: #1a1636;
-  --color-popover: #ffffff;
-  --color-popover-foreground: #1a1636;
-  --color-primary: #5b3df5;
-  --color-primary-hover: #4a2fd6;
+  --color-background: #f5f1e8;
+  --color-foreground: #1c2733;
+  --color-card: #fffdf8;
+  --color-card-foreground: #1c2733;
+  --color-popover: #fffdf8;
+  --color-popover-foreground: #1c2733;
+  --color-primary: #1f3d5c;
+  --color-primary-hover: #172f48;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #ece8fb;
-  --color-secondary-foreground: #2a2160;
-  --color-muted: #efedf7;
-  --color-muted-foreground: #5d5878;
-  --color-accent: #ebe6ff;
-  --color-accent-foreground: #3a26b0;
-  --color-destructive: #c8283d;
+  --color-secondary: #ebe5d8;
+  --color-secondary-foreground: #1c2733;
+  --color-muted: #ece6da;
+  --color-muted-foreground: #5b6470;
+  --color-accent: #e3e8ec;
+  --color-accent-foreground: #1f3d5c;
+  --color-destructive: #a8322d;
   --color-destructive-foreground: #ffffff;
-  --color-border: #e2deef;
-  --color-input: #8a84a8;
-  --color-ring: #5b3df5;
-  --radius: 0.625rem;
+  --color-border: #e0d8c8;
+  --color-input: #857c6a;
+  --color-ring: #1f3d5c;
+  --radius: 0.5rem;
 
   /* Brand + section hues. */
-  --color-coral: #ff6a3d;
-  --color-coral-ink: #a9330f;
+  --color-coral: #c8603a;
+  --color-coral-ink: #a3442a;
   --color-coral-foreground: #ffffff;
-  --color-sun: #ffc53d;
-  --color-sun-soft: #fff4d1;
-  --color-sun-foreground: #1a1636;
-  --color-berry: #b0246e;
-  --color-nav: #1a1636;
-  --color-nav-foreground: #ffffff;
-  --color-nav-muted: #b9b3d9;
+  --color-sun: #dba53e;
+  --color-sun-soft: #f6ead0;
+  --color-sun-foreground: #1c2733;
+  --color-berry: #7d4b6c;
+  --color-nav: #1c2733;
+  --color-nav-foreground: #f5f1e8;
+  --color-nav-muted: #b8c0c9;
 
   /* Status colors. White text on each passes 4.5:1. The *-ink variants are
      for text on a light tint of the same hue (soft badges, notes). */
-  --color-success: #0b7a55;
-  --color-success-ink: #096a4a;
+  --color-success: #2f6b4f;
+  --color-success-ink: #285c44;
   --color-success-foreground: #ffffff;
-  --color-warning: #a85a00;
-  --color-warning-ink: #8a4a00;
+  --color-warning: #9a5b12;
+  --color-warning-ink: #834c0d;
   --color-warning-foreground: #ffffff;
-  --color-info: #0868b0;
-  --color-info-ink: #075a98;
+  --color-info: #3f6683;
+  --color-info-ink: #355a75;
   --color-info-foreground: #ffffff;
 
-  --shadow-card: 0 1px 2px 0 rgba(26, 22, 54, 0.05), 0 6px 20px -12px rgba(26, 22, 54, 0.18);
-  --shadow-card-hover: 0 2px 4px 0 rgba(26, 22, 54, 0.06), 0 12px 28px -12px rgba(26, 22, 54, 0.28);
-  --color-shell: #ece9f7;
-  --color-shell-panel: #ffffff;
+  --shadow-card: 0 1px 2px 0 rgba(28, 39, 51, 0.06);
+  --shadow-card-hover: 0 4px 14px -6px rgba(28, 39, 51, 0.2);
+  --color-shell: #efeadf;
+  --color-shell-panel: #fffdf8;
 }

@@ -3,7 +3,7 @@
  * on Crew, Results and Book. Keyed on the traveler id (not the display name,
  * which can change). Display only.
  */
-export const PERSON_HUES = ['iris', 'coral', 'sky', 'green', 'berry', 'ink'] as const
+export const PERSON_HUES = ['navy', 'terracotta', 'slate', 'pine', 'plum', 'ochre'] as const
 export type PersonHue = (typeof PERSON_HUES)[number]
 
 export function personHue(id: string): PersonHue {

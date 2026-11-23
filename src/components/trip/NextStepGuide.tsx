@@ -57,12 +57,12 @@ export function NextStepGuide({
       data-stage={step.stage}
       className={cn(
         'surface relative overflow-hidden p-4 sm:p-5',
-        step.done ? 'border-success/40 bg-gradient-to-br from-success/10 to-card' : 'border-primary/30',
+        step.done && 'border-success/40 bg-success/5',
       )}
     >
       <span
         aria-hidden
-        className={cn('absolute inset-y-0 left-0 w-1', step.done ? 'bg-success' : 'bg-gradient-to-b from-primary to-coral')}
+        className={cn('absolute inset-y-0 left-0 w-1', step.done ? 'bg-success' : 'bg-coral')}
       />
       <ol className="flex items-center" aria-label={`Step ${step.index + 1} of ${STAGES.length}: ${STAGES[step.index].label}`}>
         {STAGES.map((s, i) => {

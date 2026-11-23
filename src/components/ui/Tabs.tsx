@@ -30,7 +30,7 @@ function TabsList({
       <TabsPrimitive.Indicator
         data-slot="tabs-indicator"
         className={cn(
-          'absolute -z-10 left-[var(--active-tab-left)] top-[var(--active-tab-top)] h-[var(--active-tab-height)] w-[var(--active-tab-width)] rounded-lg bg-card shadow-[0_1px_2px_rgba(26,22,54,0.08),0_4px_10px_-4px_rgba(26,22,54,0.18)] motion-safe:transition-[left,top,width,height,background-color] motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.2,0.8,0.2,1)]',
+          'absolute -z-10 left-[var(--active-tab-left)] top-[var(--active-tab-top)] h-[var(--active-tab-height)] w-[var(--active-tab-width)] rounded-lg bg-card shadow-[0_1px_2px_rgba(28,39,51,0.08),0_4px_10px_-4px_rgba(28,39,51,0.18)] motion-safe:transition-[left,top,width,height,background-color] motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.2,0.8,0.2,1)]',
           indicatorClassName,
         )}
       />

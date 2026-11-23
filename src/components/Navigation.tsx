@@ -57,7 +57,7 @@ export default function Navigation() {
         className={cn(
           'relative rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors duration-150',
           active
-            ? 'bg-white/12 text-nav-foreground after:absolute after:inset-x-3 after:-bottom-[11px] after:h-0.5 after:rounded-full after:bg-coral'
+            ? 'bg-white/12 text-nav-foreground after:absolute after:inset-x-3 after:-bottom-[11px] after:h-0.5 after:rounded-full after:bg-sun'
             : 'text-nav-muted hover:bg-white/8 hover:text-nav-foreground',
         )}
       >
@@ -68,7 +68,7 @@ export default function Navigation() {
 
   return (
     <>
-      <nav data-testid="app-navigation" aria-label="Main" className="bg-nav text-nav-foreground shadow-[0_1px_0_rgba(255,255,255,0.06),0_8px_24px_-12px_rgba(26,22,54,0.5)]">
+      <nav data-testid="app-navigation" aria-label="Main" className="bg-nav text-nav-foreground border-b-4 border-coral">
         <div className="mx-auto flex h-14 max-w-5xl items-center gap-2 px-4 sm:gap-4 sm:px-6">
           <Link
             to="/trips"
@@ -107,9 +107,9 @@ export default function Navigation() {
                     aria-label="Account menu"
                     className="group flex cursor-pointer items-center gap-2 rounded-full border border-white/15 bg-white/8 py-1 pl-1 pr-2.5 text-sm transition-colors hover:border-white/30 hover:bg-white/15 data-[popup-open]:bg-white/15"
                   >
-                    <Avatar className="h-6 w-6 ring-2 ring-coral">
+                    <Avatar className="h-6 w-6 ring-2 ring-white/30">
                       <AvatarImage src={user.imageUrl ?? undefined} referrerPolicy="no-referrer" />
-                      <AvatarFallback className="bg-coral text-[11px] font-semibold text-nav">
+                      <AvatarFallback className="bg-coral-ink text-[11px] font-semibold text-white">
                         {(user.name?.[0] ?? user.email?.[0] ?? '?').toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
@@ -149,7 +149,7 @@ export default function Navigation() {
             <button
               data-testid="nav-sign-in-button"
               onClick={() => setShowAuthModal(true)}
-              className="cursor-pointer rounded-lg bg-coral px-3.5 py-1.5 text-sm font-semibold text-nav transition-colors hover:bg-sun"
+              className="cursor-pointer rounded-lg bg-coral-ink px-3.5 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-coral-ink/85"
             >
               Sign in
             </button>

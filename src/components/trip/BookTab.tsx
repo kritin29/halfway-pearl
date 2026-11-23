@@ -89,7 +89,7 @@ function BookContent({ trip, me, onRetry }: { trip: RecordData<TripData>; me: st
   return (
     <div className="flex flex-col gap-4" data-testid="book">
       <section
-        className="relative isolate overflow-hidden rounded-2xl bg-gradient-to-br from-[#06513a] via-success to-info p-5 text-white shadow-[0_18px_40px_-20px_rgba(6,81,58,0.8)] sm:p-6"
+        className="relative isolate overflow-hidden rounded-xl border-b-4 border-sun bg-success p-5 text-white shadow-[0_6px_18px_-10px_rgba(28,39,51,0.5)] sm:p-6"
         data-testid="locked-destination"
         data-iata={iata}
       >
@@ -264,7 +264,7 @@ function Checklist({
         aria-valuenow={booked}
       >
         <div
-          className="h-full rounded-full bg-gradient-to-r from-success to-[#16a37a] transition-[width] duration-500"
+          className="h-full rounded-full bg-success transition-[width] duration-500"
           style={{ width: `${rows.length ? (booked / rows.length) * 100 : 0}%` }}
         />
       </div>

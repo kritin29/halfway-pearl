@@ -28,7 +28,7 @@ export default function TripsPage() {
       <title>{pageTitle('Your trips')}</title>
       <header>
         <h1 className="font-display text-4xl font-bold tracking-tight">
-          Your <span className="bg-gradient-to-r from-primary to-coral-ink bg-clip-text text-transparent">trips</span>
+          Your trips
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Find the best place to meet, with everyone entering their own airports and a private budget.
@@ -152,7 +152,7 @@ function DemoTripOffer() {
     <section
       aria-labelledby="demo-trip-heading"
       data-testid="demo-offer"
-      className="flex flex-col gap-3 rounded-2xl border border-sun bg-gradient-to-br from-sun-soft via-card to-accent p-4 shadow-[0_10px_30px_-18px_rgba(168,90,0,0.55)] sm:flex-row sm:items-center sm:justify-between sm:p-5"
+      className="flex flex-col gap-3 rounded-xl border border-sun bg-sun-soft p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
     >
       <div className="flex min-w-0 gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sun text-sun-foreground">

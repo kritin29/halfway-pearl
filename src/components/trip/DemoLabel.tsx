@@ -29,7 +29,7 @@ export function DemoBanner() {
     <div
       role="note"
       data-testid="demo-banner"
-      className="flex items-start gap-3 rounded-xl border border-sun bg-sun-soft px-4 py-3 text-sm shadow-[0_6px_20px_-14px_rgba(168,90,0,0.6)]"
+      className="flex items-start gap-3 rounded-xl border border-sun bg-sun-soft px-4 py-3 text-sm"
     >
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sun text-sun-foreground">
         <FlaskConical className="h-4 w-4" aria-hidden />

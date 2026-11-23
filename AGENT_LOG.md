@@ -374,3 +374,16 @@ Rulings recorded: D5 approved; D3 keep the history readable, with generic error 
 - Light theme only; checked in headless Chromium, not a real phone.
 **I verified myself (how):**
 - …
+
+## Phase 10b: palette replaced ("Timetable"), Mon Nov 23
+Developer feedback: the effects are good, the "Dusk" colors look generic and AI-made.
+**Agent (Claude Code) did:**
+- Replaced the palette in `src/themes.css` with one harmonious family, a mid-century airline poster: oat paper, navy ink for actions, terracotta (brand pin, Results), ochre (highlights, #1 pick, demo label), pine (done: booked, voted, locked, Book), slate (Crew), plum (avatars only). All hues at matching muted strength. Token names kept, so components didn't change for color alone.
+- Removed every gradient, the gradient headline text and the colored glow shadows (buttons, header, boarding pass, progress bars, demo offer). Cards are flat paper with a hairline shadow; the nav, trip header and boarding pass get a 4px livery stripe (terracotta / ochre) instead.
+- Section hues re-spread so no two neighbors are similar blues: Crew slate, Destinations ochre, Results terracotta, Book pine. Avatar hues renamed to match (`src/lib/person-hue.ts`).
+- Text never sits on the light terracotta fill (ink on it is 3.7:1); the nav sign-in button and avatar use the deeper terracotta. Contrast for every pair in the theme comment.
+- Results: `test run unit` 437 passed; smoke+api (no real calls) 38 passed; e2e (no real calls) 55 passed; tsc 0; eslint 0; `vite build` prerenders `/`. Screenshots from a throwaway spec (deleted).
+**Unsure about:**
+- The landing page (`/`) inherits these colors but wasn't screenshotted.
+**I verified myself (how):**
+- …

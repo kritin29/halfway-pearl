@@ -3,12 +3,12 @@ import { initial, personHue, type PersonHue } from '@/lib/person-hue'
 
 /* White text on each passes 4.5:1 (themes.css). */
 const HUE_CLASS: Record<PersonHue, string> = {
-  iris: 'bg-primary text-primary-foreground',
-  coral: 'bg-coral-ink text-coral-foreground',
-  sky: 'bg-info text-info-foreground',
-  green: 'bg-success text-success-foreground',
-  berry: 'bg-berry text-white',
-  ink: 'bg-foreground text-background',
+  navy: 'bg-primary text-primary-foreground',
+  terracotta: 'bg-coral-ink text-coral-foreground',
+  slate: 'bg-info text-info-foreground',
+  pine: 'bg-success text-success-foreground',
+  plum: 'bg-berry text-white',
+  ochre: 'bg-sun text-sun-foreground',
 }
 
 const SIZE = {

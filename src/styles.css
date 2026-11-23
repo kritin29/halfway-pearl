@@ -171,22 +171,22 @@
 @utility zoom-in-50 { --tw-enter-scale: .5; }
 
 /*
- * Halfway surfaces. `surface` is every card: white on the lavender page, a
- * hairline border and a soft indigo shadow so cards read as raised.
+ * Halfway surfaces. `surface` is every card: warm white on the oat page, a
+ * hairline border and a barely-there ink shadow. Flat, like printed paper.
  * `surface-interactive` adds the hover lift for whole-card links.
  */
 @utility surface {
   border-radius: calc(var(--radius) + 4px);
   border: 1px solid var(--color-border);
   background-color: var(--color-card);
-  box-shadow: 0 1px 2px 0 rgba(26, 22, 54, 0.05), 0 6px 20px -12px rgba(26, 22, 54, 0.18);
+  box-shadow: 0 1px 2px 0 rgba(28, 39, 51, 0.06);
 }
 
 @utility surface-interactive {
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
   &:hover {
-    border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
-    box-shadow: 0 2px 4px 0 rgba(26, 22, 54, 0.06), 0 14px 30px -14px rgba(26, 22, 54, 0.32);
+    border-color: color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
+    box-shadow: 0 6px 16px -8px rgba(28, 39, 51, 0.28);
   }
   @media (prefers-reduced-motion: no-preference) {
     &:hover { transform: translateY(-2px); }

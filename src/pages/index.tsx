@@ -18,8 +18,8 @@
  *   Then nothing moves.
  *
  * Style Tile
- * - Color: "Dusk" (src/themes.css): lavender-mist page, deep indigo ink,
- *   iris violet for actions, a coral pin where the routes meet.
+ * - Color: "Timetable" (src/themes.css): oat paper, navy ink, terracotta
+ *   pin where the routes meet; ochre, pine and slate as supporting hues.
  * - Type: Bricolage Grotesque (headings) + Inter (body) + IBM Plex Mono (airport codes,
  *   fares). A boarding pass's confidence over a ticket's precision.
  * - Theme: light. Planning happens on a phone at lunch, not in a dark room.
