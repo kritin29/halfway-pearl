@@ -203,8 +203,7 @@ npx tsc --noEmit && npx eslint .
 git commit …                    # deploy ships the working tree, so commit first
 npx deepspace deploy            # → https://halfway-pearl.app.space
 # Cron proof: the CronRoom's run history, not the logs (alarm-time output isn't in `deepspace logs`).
-# A read-only socket to wss://halfway-pearl.app.space/ws/cron/app:<DEEPSPACE_APP_ID> receives
-# `cron.tasks` (lastRunAt, nextRunAt) and `cron.history`.
+node scripts/live-check/cron-history.mjs   # read-only: tasks (lastRunAt, nextRunAt) + run history
 ```
 
 Source control is plain Git with GitHub as the source of truth (the DeepSpace cloud repo commands are not used).
@@ -215,6 +214,7 @@ Source control is plain Git with GitHub as the source of truth (the DeepSpace cl
 - **The flight parser is built from SerpApi's published docs**, tested against a **hand-made** fixture that follows them, and not yet checked against a real response. The first real search in production is the first real check; the field names (`best_flights`, `other_flights`, `price_insights`, `layovers`, times) should be cross-checked then.
 - **Concurrency is tested with fakes.** Concurrent joins, the 6-destination limit under two writers, the email claim pattern and job retries are tested with a fake store and a fake job context, not against the real Durable Objects under load. Spend counters are soft by ±1.
 - **The cron has run once on the deployed app** (2026-11-23 08:00 CT, success, per the CronRoom history). It first deployed after the Nov 22 slot had passed. With the quota out, no watched trip can get new prices yet.
+- **The cron's run history is public.** Anyone can open a token-less socket to `/ws/cron/app:<appId>` and read the task's schedule and recent runs: start time, success, duration and error text (writes are refused). By design, a failed cron task or job only ever reports a generic message such as `fare-watch failed: storage error at "query watched trips"`, never a trip name, email, budget or user id (`src/lib/safe-error.ts`, tested in `src/server/safe-errors.test.ts`). `scripts/live-check/cron-history.mjs` reads it.
 - **Demo prices are illustrative.** They come from a hand-made fixture, not observed fares, and are fixed per route, so a demo never shows a price drop.
 - **Real email delivery is unconfirmed.** The one real send was accepted by the platform, but the test address is on the reserved `@deepspace.test` domain.
 - **Read access by `createdBy`.** On collections without an `ownerField` (candidates, fares, fareSnapshots), the row's creator keeps read access. Harmless today because nobody can leave a trip.

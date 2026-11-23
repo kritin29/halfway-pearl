@@ -339,3 +339,17 @@ Rulings recorded: Phase 7 W0–W9 approved (SPEC #48). No business logic, schema
 - The cron history is readable without a token (NOTES D3). It shows task names, times and errors only; I left it as is.
 **I verified myself (how):**
 - …
+
+## Phase 9b: rulings follow-up (cron error text, reader script, submission note), Mon Nov 23
+Rulings recorded: D5 approved; D3 keep the history readable, with generic error text only (SPEC #56).
+**Agent (Claude Code) did:**
+- `src/lib/safe-error.ts`: `safeErrorText` / `genericFailure`. `src/cron.ts` and `src/jobs.ts` throw only a fresh generic Error with no cause (`fare-watch failed: storage error at "query watched trips"`). `ToolError` now carries its `step` separately. The fare-search failure logs and the watch-start enqueue log use the generic text. Unknown task/job names aren't echoed.
+- `src/server/safe-errors.test.ts` (6): the real `runTask` and `runJob` against a storage stub whose errors echo a user id, email, budget and trip name, covering three failure points (cron query, job load, job search plus give-up). None appear in the thrown message or in any console output. Mutation checks: raw error through the cron (1 failure), through the job (2), raw text in the job log (1), step label not filtered (1); all restored.
+- `scripts/live-check/cron-history.mjs`: read-only, token-less reader; reads the app id/name from wrangler.toml, `CRON_URL` override, 10 s timeout. Ran it against production: same single run (2026-11-23 14:00Z, success, 253 ms), next run 2026-11-24 14:00Z.
+- `SUBMISSION_NOTE.md` drafted from README, SPEC, NOTES and this log; "What I verified or changed myself" left as placeholders.
+- README known limitations: the public cron history and the generic-error rule. NOTES D3 resolved (and my earlier claim that the errors were already generic corrected; they weren't).
+- Results: `test run unit` 27 files / 432 passed; tsc 0; eslint 0. No suites other than unit were run this step, per the brief. No real integration calls.
+**Unsure about:**
+- `defineAction`'s action-failure log still prints the raw storage message (owner-only logs, outside the cron/job boundary). The same sanitizer would fit there; not done without your say-so.
+**I verified myself (how):**
+- …
