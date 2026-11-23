@@ -353,3 +353,24 @@ Rulings recorded: D5 approved; D3 keep the history readable, with generic error 
 - `defineAction`'s action-failure log still prints the raw storage message (owner-only logs, outside the cron/job boundary). The same sanitizer would fit there; not done without your say-so.
 **I verified myself (how):**
 - …
+
+## Phase 10: visual pass ("Dusk" palette, feedback, navigation), Mon Nov 23
+**Agent (Claude Code) did:**
+- New palette in `src/themes.css` ("Dusk"): lavender-mist page, white raised cards, deep indigo ink, iris violet for actions, coral brand pin, sun yellow highlight, plus a berry hue for avatars. Every text/background pair checked for WCAG contrast (numbers in the file comment). Headings now Bricolage Grotesque (index.html font link).
+- Each trip section has its own icon and hue: Crew sky, Destinations iris, Results coral, Book green. Same hues on the status badges and the colored edge of each `/trips` card.
+- Primitives: buttons lift on hover, sink and shrink on press, and gain `success` / `ink` / `soft` variants; the tab pill now slides between tabs (Base UI `Tabs.Indicator`); badges are soft tints with icons; inputs and selects get a hover border and a focus ring.
+- Pages: dark nav bar with a coral underline on the active link; a fade-and-rise on every route change and tab switch (`.enter-page` / `.enter-panel`, off under reduced motion, ending on `transform: none` so fixed children aren't trapped); a gradient trip header; next-step guide with green done steps and a pulsing current step.
+- Results: rank chips (#1 in sun, "Top pick"), colored avatar per traveler (`src/lib/person-hue.ts`, unit-tested, keyed on traveler id so it matches across tabs), "Voted" turns green with a popping check, a dark "Lock this destination" button.
+- Book: green boarding-pass card for the locked destination, big fare with a full-width booking button, checklist rows turn green with a popping check, an "Everyone's booked" line, and toasts when you mark yourself or a ghost booked. Next-step buttons ("See the checklist" etc.) now also scroll the section into view, so they visibly do something even when that tab is already open.
+- Kept every `data-testid`, button name and tested string ("budget set ✓", "X of Y booked", the demo label wording). The demo label stays on every demo card per SPEC §14, restyled as a small sun pill.
+- Results: `test run unit` 28 files / 437 passed; `test run --grep "^(?!.*one real).*$"` (smoke+api) 38 passed; `test run e2e --grep "^(?!.*one real).*$"` 55 passed; tsc 0; eslint 0; `vite build` prerenders `/`. No real integration calls.
+- Before/after screenshots at 1280px and 390px from a throwaway spec (deleted).
+**What broke / surprised me:**
+- My first screenshot run matched no tests (`--grep "^shots$"`); the title includes the file name.
+- First pass gave two ghosts near-identical amber avatars and a gray blob on "not yet" checklist rows; the demo label sat on the same line as "Locked" in the green card; the header's route drawing covered the trip name at 390px. All fixed from the screenshots.
+**Unsure about:**
+- Avatar colors come from a hash of the traveler id, so two people can still share a color (6 hues).
+- The landing page (`/`) inherits the new palette and font, but I didn't redesign it or screenshot it.
+- Light theme only; checked in headless Chromium, not a real phone.
+**I verified myself (how):**
+- …
