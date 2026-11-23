@@ -33,6 +33,9 @@ export const tripsSchema: CollectionSchema = {
     { name: 'watchQueuedAt', storage: 'text', interpretation: { kind: 'datetime' } },
     // Why the last watch run couldn't check everything; null when it did. Never contains budgets.
     { name: 'watchError', storage: 'text', interpretation: 'plain', maxLength: 300 },
+    // Demo trip (src/lib/demo.ts): set only by the createDemoTrip action, never
+    // changed afterwards. Clients can't write trips at all (MEMBERS_READ_ONLY).
+    { ...FLAG_COLUMN('isDemo', 0), immutable: true },
   ],
   uniqueOn: ['inviteCode'],
   ownerField: 'organizerId',

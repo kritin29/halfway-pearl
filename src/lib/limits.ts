@@ -51,6 +51,8 @@ export const LIMITS = {
   staleWatchMs: 20 * 60 * 1000,
   /** Max trips one user may create per day (UTC). Abuse cap; creating a trip costs nothing. */
   maxTripsCreatedPerUserPerDay: 10,
+  /** Max demo trips one user may create per day (UTC). Separate from the trip cap above. */
+  maxDemoTripsPerUserPerDay: 3,
   /** At most one progress write to the trip row per this many ms while a search runs. */
   searchProgressThrottleMs: 1000,
   /**

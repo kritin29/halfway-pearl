@@ -26,6 +26,8 @@ export interface TripData {
   watchQueuedAt?: string | null
   /** Why the last watch run couldn't check everything; null when it did. */
   watchError?: string | null
+  /** 1 = demo trip (sample fares, no emails, no cron watch). Set only by createDemoTrip; immutable. */
+  isDemo?: number
 }
 
 export interface TravelerData {
