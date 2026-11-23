@@ -197,14 +197,16 @@
 /* Page and tab entrances, a checkmark pop and a "you are here" pulse.
    All off for reduced motion. */
 @media (prefers-reduced-motion: no-preference) {
-  .enter-page { animation: enter-page 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-  .enter-panel { animation: enter-page 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .enter-page { animation: enter-page 320ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+  .enter-panel { animation: enter-page 240ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
   .pop { animation: pop 360ms cubic-bezier(0.2, 0.9, 0.3, 1.4) both; }
   .pulse-ring { animation: pulse-ring 1.8s ease-out infinite; }
 }
 
-/* Ends on `transform: none` (not translateY(0)) so the wrapper doesn't stay
-   a containing block for position: fixed descendants after the animation. */
+/* `backwards` fill, not `both`: a finished animation that keeps filling
+   counts as an active transform, which would make the page wrapper the
+   containing block for position: fixed children (the SDK's sign-in overlay
+   isn't portaled). With `backwards` the wrapper has no transform once done. */
 @keyframes enter-page {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }

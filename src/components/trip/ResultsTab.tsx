@@ -118,6 +118,7 @@ function ResultsContent({
   // read: 'own' — the room only ever sends my own row.
   const budgets = useQuery<BudgetData>('budgets', { where: { tripId }, limit: 5 })
   const [mode, setMode] = useState<SortMode>('cheapest')
+  const { ready } = useMutations('trips')
 
   const all = [candidates, fares, votes, travelers, budgets]
   if (all.some((q) => q.status === 'loading')) return <LoadingState label="Loading results…" />
@@ -142,7 +143,7 @@ function ResultsContent({
   const sorted = sortResultCards(cards, mode)
   const locked = trip.data.status === 'locked'
   // Lockable: organizer, results are in, and everyone has a fare there.
-  const canLock = isOrganizer && trip.data.status === 'results'
+  const canLock = ready && isOrganizer && trip.data.status === 'results'
   const demo = isDemoTrip(trip.data)
 
   async function confirmLock() {

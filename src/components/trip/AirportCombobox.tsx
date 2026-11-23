@@ -29,7 +29,11 @@ export function AirportCombobox({
   const listId = `${id}-options`
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
-  const options = disabled ? [] : searchAirports(query, exclude)
+  // Closed on blur so the list never sits over the rest of the form; typing
+  // or focusing the input opens it again.
+  const [open, setOpen] = useState(false)
+  const options = disabled || !open ? [] : searchAirports(query, exclude)
+  const optionId = (code: string) => `${id}-option-${code}`
 
   function pick(code: string) {
     onSelect(code)
@@ -49,6 +53,7 @@ export function AirportCombobox({
       pick(options[active].iata)
     } else if (e.key === 'Escape') {
       setQuery('')
+      setOpen(false)
     } else if (e.key === 'Backspace' && !query) {
       onBackspaceEmpty?.()
     }
@@ -63,6 +68,7 @@ export function AirportCombobox({
         aria-expanded={options.length > 0}
         aria-controls={listId}
         aria-autocomplete="list"
+        aria-activedescendant={options[active] ? optionId(options[active].iata) : undefined}
         autoComplete="off"
         disabled={disabled}
         placeholder={placeholder}
@@ -70,7 +76,10 @@ export function AirportCombobox({
         onChange={(e) => {
           setQuery(e.target.value)
           setActive(0)
+          setOpen(true)
         }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
         onKeyDown={onKeyDown}
       />
       {options.length > 0 && (
@@ -82,6 +91,7 @@ export function AirportCombobox({
           {options.map((a, i) => (
             <li
               key={a.iata}
+              id={optionId(a.iata)}
               role="option"
               aria-selected={i === active}
               // mousedown, not click: keeps the input from blurring first.

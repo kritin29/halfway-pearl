@@ -67,6 +67,7 @@ function BookContent({ trip, me, onRetry }: { trip: RecordData<TripData>; me: st
     return (
       <div className="flex flex-col gap-4" data-testid="book">
         <EmptyNote title="No destination locked yet">
+          {isDemoTrip(trip.data) && <DemoLabel className="mx-auto mb-2 flex" />}
           When the organizer locks a destination on the Results tab, everyone books here.
         </EmptyNote>
         {trip.data.status === 'results' && <FareWatch trip={trip} me={me} />}
@@ -374,7 +375,7 @@ function ChecklistRow({
           aria-pressed={done}
           onClick={() => void toggle()}
           loading={pending}
-          disabled={pending || (isMe && !ready)}
+          disabled={pending || !ready}
           className="w-full sm:w-auto"
         >
           {!done && !pending && <Check aria-hidden />}
@@ -388,10 +389,12 @@ function ChecklistRow({
 function OrganizerTools({ trip, iata, demo }: { trip: RecordData<TripData>; iata: string; demo: boolean }) {
   const toast = useToast()
   const resend = useAction<LockReport>('lockTrip')
+  const { ready } = useMutations('trips')
 
   if (demo) {
     return (
       <section className="surface p-4 sm:p-5" aria-label="Organizer tools" data-testid="demo-emails-off">
+        <DemoLabel className="mb-3" />
         <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
           <Mail className="h-4 w-4 shrink-0" aria-hidden />
           {DEMO_EMAILS_OFF} In a real trip, everyone gets their own booking link by email when you lock.
@@ -419,7 +422,7 @@ function OrganizerTools({ trip, iata, demo }: { trip: RecordData<TripData>; iata
           size="sm"
           onClick={() => void resendEmails()}
           loading={resend.pending}
-          disabled={resend.pending}
+          disabled={resend.pending || !ready}
           className="shrink-0"
         >
           {!resend.pending && <Mail aria-hidden />}

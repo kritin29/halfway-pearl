@@ -4,7 +4,7 @@
  * validated here for a good UX; server code re-validates before using them
  * (NOTES G1).
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutations, type RecordData } from 'deepspace'
 import { Check } from 'lucide-react'
 import { Button } from '@/components/ui'
@@ -36,9 +36,14 @@ export function YourSettings({ row }: { row: RecordData<TravelerData> }) {
   const dirty = !same(form, saved)
 
   // Another device changed my row: follow it unless I have unsaved edits.
+  // "Unsaved" means the form differs from the PREVIOUS saved values; compared
+  // with the new ones it always differs, so the form would never follow.
   const savedKey = JSON.stringify(saved)
+  const lastSaved = useRef(savedKey)
   useEffect(() => {
-    if (!dirty) setForm(JSON.parse(savedKey) as Editable)
+    const previous = lastSaved.current
+    lastSaved.current = savedKey
+    setForm((f) => (JSON.stringify(f) === previous ? (JSON.parse(savedKey) as Editable) : f))
   }, [savedKey])
 
   async function save() {
