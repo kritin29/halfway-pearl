@@ -8,47 +8,70 @@
  */
 
 /*
- * Halfway — "a paper route map on a corkboard".
- * Warm paper background, navy ink text, one vermilion accent (the pin where
- * routes meet) reserved for primary actions and the meeting point.
- * Contrast (WCAG): ink on paper 13.8:1, muted text on paper 5.3:1 and on
- * muted 4.8:1, white on vermilion 5.6:1, vermilion on paper 4.9:1, white on
- * each status color ≥ 6:1, input borders ≥ 3:1 against card and paper.
+ * Halfway "Dusk": a flight at golden hour.
+ * Lavender-mist page, white cards, deep indigo ink. Iris violet is the one
+ * action color (buttons, selected tabs, focus). Coral is the brand pin
+ * (where routes meet) and the Results section; sun yellow is the highlight
+ * for the top pick and the demo label. Each trip section has its own hue so
+ * you always know where you are: Crew = sky, Destinations = iris,
+ * Results = coral, Book = green.
+ *
+ * Contrast (WCAG, checked): ink on page 15.6:1; muted text on page 6.0:1,
+ * on white 6.7:1, on muted 5.8:1; white on iris 6.1:1; iris on page 5.5:1;
+ * white on success 5.3, warning 5.1, info 5.8, destructive 5.5, coral-ink
+ * 6.6, berry 6.3; every *-ink text color on its own 12% tint ≥ 4.6:1; input border on
+ * white 3.5:1; ink on sun 11:1; nav text on nav 17:1.
  */
 [data-theme="halfway"] {
   color-scheme: light;
-  --color-background: #f5f0e6;
-  --color-foreground: #1c2430;
-  --color-card: #fffdf8;
-  --color-card-foreground: #1c2430;
-  --color-popover: #fffdf8;
-  --color-popover-foreground: #1c2430;
-  --color-primary: #b4441e;
+  --color-background: #f4f2fb;
+  --color-foreground: #1a1636;
+  --color-card: #ffffff;
+  --color-card-foreground: #1a1636;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #1a1636;
+  --color-primary: #5b3df5;
+  --color-primary-hover: #4a2fd6;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #ebe4d6;
-  --color-secondary-foreground: #1c2430;
-  --color-muted: #ece6da;
-  --color-muted-foreground: #5b6472;
-  --color-accent: #e6dfd0;
-  --color-accent-foreground: #1c2430;
-  --color-destructive: #b42318;
+  --color-secondary: #ece8fb;
+  --color-secondary-foreground: #2a2160;
+  --color-muted: #efedf7;
+  --color-muted-foreground: #5d5878;
+  --color-accent: #ebe6ff;
+  --color-accent-foreground: #3a26b0;
+  --color-destructive: #c8283d;
   --color-destructive-foreground: #ffffff;
-  --color-border: #d9d0bf;
-  --color-input: #7d725e;
-  --color-ring: #b4441e;
-  --radius: 0.5rem;
+  --color-border: #e2deef;
+  --color-input: #8a84a8;
+  --color-ring: #5b3df5;
+  --radius: 0.625rem;
 
-  /* Status colors, darkened from the scaffold's so white text on them passes
-     4.5:1 (the scaffold's #10b981 / #f59e0b with white text did not). */
-  --color-success: #1d7046;
+  /* Brand + section hues. */
+  --color-coral: #ff6a3d;
+  --color-coral-ink: #a9330f;
+  --color-coral-foreground: #ffffff;
+  --color-sun: #ffc53d;
+  --color-sun-soft: #fff4d1;
+  --color-sun-foreground: #1a1636;
+  --color-berry: #b0246e;
+  --color-nav: #1a1636;
+  --color-nav-foreground: #ffffff;
+  --color-nav-muted: #b9b3d9;
+
+  /* Status colors. White text on each passes 4.5:1. The *-ink variants are
+     for text on a light tint of the same hue (soft badges, notes). */
+  --color-success: #0b7a55;
+  --color-success-ink: #096a4a;
   --color-success-foreground: #ffffff;
-  --color-warning: #8f5300;
+  --color-warning: #a85a00;
+  --color-warning-ink: #8a4a00;
   --color-warning-foreground: #ffffff;
-  --color-info: #1f5f99;
+  --color-info: #0868b0;
+  --color-info-ink: #075a98;
   --color-info-foreground: #ffffff;
 
-  --shadow-card: 0 1px 2px 0 rgba(28, 36, 48, 0.06);
-  --shadow-card-hover: 0 2px 8px 0 rgba(28, 36, 48, 0.08);
-  --color-shell: #efe9dd;
-  --color-shell-panel: #fffdf8;
+  --shadow-card: 0 1px 2px 0 rgba(26, 22, 54, 0.05), 0 6px 20px -12px rgba(26, 22, 54, 0.18);
+  --shadow-card-hover: 0 2px 4px 0 rgba(26, 22, 54, 0.06), 0 12px 28px -12px rgba(26, 22, 54, 0.28);
+  --color-shell: #ece9f7;
+  --color-shell-panel: #ffffff;
 }

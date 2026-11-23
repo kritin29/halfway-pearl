@@ -59,6 +59,23 @@
   --color-info: #3b82f6;
   --color-info-foreground: #ffffff;
 
+  /* Halfway tokens (values come from themes.css; these defaults only make
+     Tailwind generate the utilities: bg-coral, text-success-ink, bg-nav …). */
+  --color-primary-hover: #6d5ef7;
+  --color-success-ink: #10b981;
+  --color-warning-ink: #f59e0b;
+  --color-info-ink: #3b82f6;
+  --color-coral: #ff6a3d;
+  --color-coral-ink: #ff6a3d;
+  --color-coral-foreground: #ffffff;
+  --color-sun: #ffc53d;
+  --color-sun-soft: #3a3320;
+  --color-sun-foreground: #0a0a0a;
+  --color-berry: #b0246e;
+  --color-nav: #0a0a0a;
+  --color-nav-foreground: #ffffff;
+  --color-nav-muted: #9ca3af;
+
   /*
    * Shadows — slate (default). Each theme in themes.css tunes these.
    *
@@ -94,10 +111,10 @@
   /* Animations */
   --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
 
-  /* Type: Inter for reading, Fraunces for headings (font-display),
+  /* Type: Inter for reading, Bricolage Grotesque for headings (font-display),
      IBM Plex Mono for airport codes and fares (font-mono). Loaded in index.html. */
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-display: 'Fraunces', ui-serif, Georgia, serif;
+  --font-display: 'Bricolage Grotesque', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
 }
 
@@ -151,6 +168,58 @@
 @utility slide-out-to-bottom-2 { --tw-exit-translate-y: 0.5rem; }
 @utility slide-out-to-left-2 { --tw-exit-translate-x: -0.5rem; }
 @utility slide-out-to-right-2 { --tw-exit-translate-x: 0.5rem; }
+@utility zoom-in-50 { --tw-enter-scale: .5; }
+
+/*
+ * Halfway surfaces. `surface` is every card: white on the lavender page, a
+ * hairline border and a soft indigo shadow so cards read as raised.
+ * `surface-interactive` adds the hover lift for whole-card links.
+ */
+@utility surface {
+  border-radius: calc(var(--radius) + 4px);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-card);
+  box-shadow: 0 1px 2px 0 rgba(26, 22, 54, 0.05), 0 6px 20px -12px rgba(26, 22, 54, 0.18);
+}
+
+@utility surface-interactive {
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+  &:hover {
+    border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+    box-shadow: 0 2px 4px 0 rgba(26, 22, 54, 0.06), 0 14px 30px -14px rgba(26, 22, 54, 0.32);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    &:hover { transform: translateY(-2px); }
+    &:active { transform: translateY(0); }
+  }
+}
+
+/* Page and tab entrances, a checkmark pop and a "you are here" pulse.
+   All off for reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .enter-page { animation: enter-page 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .enter-panel { animation: enter-page 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .pop { animation: pop 360ms cubic-bezier(0.2, 0.9, 0.3, 1.4) both; }
+  .pulse-ring { animation: pulse-ring 1.8s ease-out infinite; }
+}
+
+/* Ends on `transform: none` (not translateY(0)) so the wrapper doesn't stay
+   a containing block for position: fixed descendants after the animation. */
+@keyframes enter-page {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  70% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-primary) 45%, transparent); }
+  100% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--color-primary) 0%, transparent); }
+}
 
 
 /*

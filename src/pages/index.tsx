@@ -18,10 +18,10 @@
  *   Then nothing moves.
  *
  * Style Tile
- * - Color: warm paper dominant; navy ink text; one vermilion accent for the
- *   pin and primary actions only. Muted everywhere else.
- * - Type: Fraunces (headings) + Inter (body) + IBM Plex Mono (airport codes,
- *   fares). A travel postcard's warmth over a ticket's precision.
+ * - Color: "Dusk" (src/themes.css): lavender-mist page, deep indigo ink,
+ *   iris violet for actions, a coral pin where the routes meet.
+ * - Type: Bricolage Grotesque (headings) + Inter (body) + IBM Plex Mono (airport codes,
+ *   fares). A boarding pass's confidence over a ticket's precision.
  * - Theme: light. Planning happens on a phone at lunch, not in a dark room.
  * - Art direction: editorial modern minimalism; hairline rules, dashed
  *   routes, no gradients, no glass.

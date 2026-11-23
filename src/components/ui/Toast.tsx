@@ -255,8 +255,9 @@ function ToastItem({ toast, onDismiss }: ToastItemProps): React.ReactElement {
       className={`
         pointer-events-auto
         relative flex items-start gap-2.5 min-w-[260px] max-w-[360px]
-        overflow-hidden rounded-lg border border-border bg-popover
-        text-popover-foreground pl-3.5 pr-2 py-2.5 shadow-lg
+        overflow-hidden rounded-xl border border-border bg-popover
+        text-popover-foreground pl-4 pr-2 py-3
+        shadow-[0_2px_4px_rgba(26,22,54,0.08),0_16px_36px_-12px_rgba(26,22,54,0.35)]
         ${exiting
           ? 'animate-out fade-out-0 slide-out-to-right-2 duration-150'
           : 'animate-in fade-in-0 slide-in-from-right-2 duration-200'
@@ -265,10 +266,10 @@ function ToastItem({ toast, onDismiss }: ToastItemProps): React.ReactElement {
       role="alert"
     >
       {/* Colored left-edge accent — the only chrome that reflects the type. */}
-      <span className={`absolute inset-y-0 left-0 w-[3px] ${accent}`} aria-hidden />
-      <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${icon}`} />
+      <span className={`absolute inset-y-0 left-0 w-1 ${accent}`} aria-hidden />
+      <Icon className={`mt-px h-5 w-5 shrink-0 ${icon}`} />
       <div className="flex-1 min-w-0">
-        <p className="text-[13px] font-medium leading-tight">{toast.title}</p>
+        <p className="text-sm font-semibold leading-tight">{toast.title}</p>
         {toast.description && (
           <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
             {toast.description}
