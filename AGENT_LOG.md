@@ -387,3 +387,18 @@ Developer feedback: the effects are good, the "Dusk" colors look generic and AI-
 - The landing page (`/`) inherits these colors but wasn't screenshotted.
 **I verified myself (how):**
 - …
+
+## Phase 11: whole-app bug review, Mon Nov 23
+**Agent (Claude Code) did:**
+- Ran four read-only reviewers in parallel (server, pure logic, UI, schemas/config), then re-checked every finding in the code myself before changing anything. Details and IDs in NOTES "Phase 11 findings".
+- Fixed: E1 integration proxy now an allowlist with case-insensitive names (any signed-in account could otherwise call unlisted paid integrations, or `SerpApi/flights`, on the owner's bill); E2 lock re-checks every current traveler's fare (a late joiner could be locked out of a fare); E3 fitsAll privacy guard ignores $0 home fares; E4 ghost roster frozen during searches, no new ghosts on locked trips; E5 AI suggestions can't be a home airport; E6 animation fill mode (my own regression from Phase 10), settings form follows other devices, airport list closes on blur, demo labels on two more Book cards, `ready` gating; E7 date picker minimum vs the UTC-day rule; E8 line breaks in names become spaces.
+- New tests: 8 unit (ranking ×2, results, lock, ghosts, suggest, validate, next-step) and 3 api (proxy bypasses).
+- Results: `test run unit` 28 files / 445 passed; smoke+api (no real calls) 41 passed; e2e (no real calls) 58 passed; tsc 0; eslint 0. No real integration calls.
+**What broke / surprised me:**
+- Python-in-heredoc turned `\t`/`\n` in my replacement strings into real control characters in `validate.ts`; rewrote it from a script file and scanned the whole diff for control characters (none left).
+- One results test fixture omitted a fare row a real search always writes; kept the change minimal (newcomers are only added to cards saved as complete) instead of changing the fixture's meaning.
+**Unsure about:**
+- The proxy tests weren't run against the old code (that would forward requests upstream on the owner's account).
+- E9–E14 are recorded, not fixed; E9 is a SPEC §7/§8 conflict that needs your call.
+**I verified myself (how):**
+- …
