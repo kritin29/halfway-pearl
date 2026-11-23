@@ -34,7 +34,16 @@ const NEEDS_ACCOUNTS =
 test.describe('server-only integrations', () => {
   test.skip(usableTestAccounts < 1, NEEDS_ACCOUNTS)
 
-  for (const endpoint of ['serpapi/flights', 'email/send', 'anthropic/chat-completion']) {
+  // Plus the two bypasses: a different letter case, and an integration that
+  // isn't in src/integrations.ts at all (it would fall back to owner billing).
+  for (const endpoint of [
+    'serpapi/flights',
+    'email/send',
+    'anthropic/chat-completion',
+    'SerpApi/flights',
+    'EMAIL/send',
+    'openai/chat-completion',
+  ]) {
     test(`signed-in POST /api/integrations/${endpoint} is 403`, async ({ users, baseURL }) => {
       const [alice] = await users(1)
       const token = await bearerFor(alice, baseURL!)

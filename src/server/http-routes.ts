@@ -237,13 +237,20 @@ export function registerAuthAndIntegrationRoutes(app: Hono<AppContext>): void {
     // identifiers only, and own keys only for the config.
     const target = integrationPath(integrationName, c.req.param('endpoint'))
     if (!target) return c.json({ error: 'Unknown integration' }, 404)
-    const config = lookupOwn(integrations, integrationName)
-    const billingMode = config?.billing ?? 'developer'
+    // Allowlist, case-insensitive: only integrations named in
+    // src/integrations.ts are proxied. An unlisted one would otherwise fall
+    // back to developer billing (the owner's token, no `usage` caps), and
+    // `SerpApi` would miss the `serpapi` entry and skip the 403 below.
+    const config = lookupOwn(integrations, integrationName.toLowerCase())
+    if (!config) {
+      return c.json({ error: 'This integration isn’t available from the browser' }, 403)
+    }
+    const billingMode = config.billing
 
     // Server-only integrations (paid, capped in `usage`) are never proxied
     // for the browser, signed in or not. Server code reaches them through
     // `tools.integration` (src/server/app-tools.ts). SPEC §11, NOTES C4.
-    if (config?.serverOnly) {
+    if (config.serverOnly) {
       return c.json({ error: 'This integration is only available to the server' }, 403)
     }
 
@@ -251,7 +258,7 @@ export function registerAuthAndIntegrationRoutes(app: Hono<AppContext>): void {
     // use; developer billing would otherwise let any visitor spend the owner's
     // credits. User billing always needs a caller to bill.
     const auth = await resolveAuth(c.req.raw, c.env)
-    if (!auth && (billingMode === 'user' || !config?.anonymous)) {
+    if (!auth && (billingMode === 'user' || !config.anonymous)) {
       return c.json({ error: 'Sign in required for this integration' }, 401)
     }
 

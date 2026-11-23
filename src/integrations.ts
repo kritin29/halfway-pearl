@@ -10,7 +10,8 @@
  * 'developer' integration to let signed-out visitors call it too — the owner
  * then pays for anyone who can reach the app.
  *
- * Integrations not listed here default to 'developer' with sign-in required.
+ * Halfway: integrations not listed here are refused by the browser proxy (403),
+ * and names match case-insensitively (src/server/http-routes.ts).
  *
  * IMPORTANT: any integration backed by per-user connected accounts (Google,
  * Composio) must be 'user' — the api-worker resolves the account from the
