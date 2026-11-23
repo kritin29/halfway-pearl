@@ -152,6 +152,29 @@ describe('fitsAll privacy guard', () => {
     const agg = aggregateCandidate(four, [...fares, ok('u-dan', 9999)], budgets)
     expect(agg.fitsAll).toBe(1)
   })
+
+  it('does not count a budgeted traveler who lives at the destination ($0 always fits)', () => {
+    // Carol lives here. Alice knows her own fare fits, so a "0" would point straight at Bob.
+    const homeFares = [ok('u-alice', 200), ok('u-bob', 450), ok('ghost:carol', 0)]
+    const budgets = new Map([
+      ['u-alice', 300],
+      ['u-bob', 400],
+      ['ghost:carol', 100],
+    ])
+    expect(aggregateCandidate(T, homeFares, budgets).fitsAll).toBeNull()
+  })
+
+  it('still shows with 3 budgeted travelers above $0 when a 4th lives there', () => {
+    const four = [...T, { id: 'u-dan', displayName: 'Dan' }]
+    const budgets = new Map([
+      ['u-alice', 300],
+      ['u-bob', 400],
+      ['ghost:carol', 100],
+      ['u-dan', 50],
+    ])
+    const agg = aggregateCandidate(four, [ok('u-alice', 200), ok('u-bob', 450), ok('ghost:carol', 90), ok('u-dan', 0)], budgets)
+    expect(agg.fitsAll).toBe(0)
+  })
 })
 
 describe('sortCandidates', () => {

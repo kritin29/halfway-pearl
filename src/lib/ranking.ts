@@ -109,10 +109,12 @@ export function aggregateCandidate(
  * fitsAll = every traveler WHO HAS A BUDGET has price ≤ budget.
  *
  * Privacy guard: return null (hidden) unless at least FITS_ALL_MIN_BUDGETS (3)
- * travelers have budgets. With only 2 budgets, a "doesn't fit" badge would tell
- * each of them that the OTHER person's budget is below that person's fare,
- * which leaks an upper bound on a private number. With 3+, nobody can tell
- * whose budget was the constraint.
+ * budgeted travelers have a fare above $0. With only 2, a "doesn't fit" badge
+ * would tell each of them that the OTHER person's budget is below that
+ * person's fare, which leaks an upper bound on a private number. With 3+,
+ * nobody can tell whose budget was the constraint. Someone who lives at the
+ * destination ($0 home fare) always fits, so everyone can rule them out:
+ * they don't count toward the 3.
  */
 export function computeFitsAll(
   travelers: readonly RankTraveler[],
@@ -120,7 +122,11 @@ export function computeFitsAll(
   budgets: ReadonlyMap<string, number>,
 ): 0 | 1 | null {
   const budgeted = travelers.filter((t) => isPrice(budgets.get(t.id)))
-  if (budgeted.length < FITS_ALL_MIN_BUDGETS) return null
+  const couldBeOver = budgeted.filter((t) => {
+    const fare = fareByTraveler.get(t.id)
+    return !(fare?.status === 'ok' && fare.price === 0)
+  })
+  if (couldBeOver.length < FITS_ALL_MIN_BUDGETS) return null
   for (const t of budgeted) {
     const fare = fareByTraveler.get(t.id)
     if (!fare || fare.status !== 'ok' || !isPrice(fare.price)) return null
