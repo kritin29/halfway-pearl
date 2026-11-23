@@ -9,8 +9,10 @@
  *   per email, mocked sends (dev/test seam) not counted.
  * - Addresses are read from `users` and passed straight to the builder;
  *   they're never stored, logged or returned.
+ * - Demo trips send nothing and report `emailsOff` (SPEC §14).
  */
 import type { ActionTools } from 'deepspace/worker'
+import { isDemoTrip } from '../lib/demo'
 import { appUrlFor, buildLockEmail, lockEmailKey } from '../lib/email'
 import type { FareRow } from '../lib/results'
 import { deliverOnce, emptyCounts, realMemberRows, type DeliveryCounts, type DeliveryDeps, type DeliveryEnv } from './email-delivery'
@@ -23,6 +25,8 @@ export { STALE_CLAIM_MS } from './email-delivery'
 export interface LockEmailReport extends DeliveryCounts {
   /** True when the dev/test seam answered instead of email/send. */
   mocked: boolean
+  /** True on a demo trip: nothing was built, claimed or sent (SPEC §14). */
+  emailsOff: boolean
 }
 
 export type LockEmailDeps = DeliveryDeps
@@ -35,7 +39,8 @@ export async function sendLockEmails(
   deps: LockEmailDeps = {},
 ): Promise<LockEmailReport> {
   const tripId = trip.id
-  const report: LockEmailReport = { ...emptyCounts(), mocked: emailIsMocked(env, trip.data.name) }
+  if (isDemoTrip(trip.data)) return { ...emptyCounts(), mocked: false, emailsOff: true }
+  const report: LockEmailReport = { ...emptyCounts(), mocked: emailIsMocked(env, trip.data.name), emailsOff: false }
 
   const travelers = await queryTravelers(tools, tripId)
   const organizerName = String(travelers.find((t) => t.data.userId === trip.data.organizerId)?.data.displayName ?? '')

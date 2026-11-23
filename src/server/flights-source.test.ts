@@ -19,6 +19,11 @@ describe('usesFixture (both gates)', () => {
     expect(usesFixture({ ALLOW_DEBUG_ROUTES: '1' }, '__test-x')).toBe(false)
     expect(usesFixture({ ALLOW_DEBUG_ROUTES: 'TRUE' }, '__test-x')).toBe(false)
   })
+  it('a demo trip (isDemo === 1) always uses the fixture, in production too; nothing else turns it on', () => {
+    expect(usesFixture({}, 'Demo trip: long weekend', 1)).toBe(true)
+    expect(usesFixture({}, 'Spring break', 1)).toBe(true)
+    for (const v of [0, undefined, null, '1', true]) expect(usesFixture({}, 'Spring break', v)).toBe(false)
+  })
 })
 
 describe('searchFlights', () => {
@@ -30,6 +35,15 @@ describe('searchFlights', () => {
     const answer = await searchFlights(store.toolsFor('owner'), {}, request, '__test-trip', { fixtureDelayMs: 0 })
     expect(answer.source).toBe('live')
     expect(store.integrationCalls).toEqual([{ endpoint: 'serpapi/flights', data: request }])
+  })
+
+  it('production + demo trip: fixture answer, no integration call', async () => {
+    const store = createFakeStore()
+    store.onIntegration(() => ({ success: true, data: { best_flights: [] } }))
+    const answer = await searchFlights(store.toolsFor('owner'), {}, request, 'Demo trip', { fixtureDelayMs: 0, isDemo: 1 })
+    expect(answer.source).toBe('fixture')
+    expect(answer.result.success).toBe(true)
+    expect(store.integrationCalls).toEqual([])
   })
 
   it('dev/test + __test- trip: fixture answer, no integration call', async () => {

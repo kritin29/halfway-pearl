@@ -3,13 +3,18 @@
  *
  * Playwright can't intercept worker-side integration calls, so the job asks
  * this module instead of calling `tools.integration` itself. It answers from
- * the saved fixture ONLY when both gates hold:
+ * the saved fixture when EITHER:
  *
- *   1. `env.ALLOW_DEBUG_ROUTES === 'true'` (set by `deepspace dev start` /
- *      `test run`, never in production), and
- *   2. the trip's name starts with `__test-`.
+ *   - the trip is a demo trip (`isDemo = 1`, set only by `createDemoTrip`;
+ *     SPEC §14). This holds in production too: a demo trip never reaches
+ *     `serpapi/flights`. Or
+ *   - both test gates hold: `env.ALLOW_DEBUG_ROUTES === 'true'` (set by
+ *     `deepspace dev start` / `test run`, never in production) AND the
+ *     trip's name starts with `__test-`.
  *
- * Otherwise it makes the real `serpapi/flights` call. Unit-tested both ways.
+ * Otherwise it makes the real `serpapi/flights` call. Unit-tested every way.
+ * Fixture answers are cached under per-trip keys (`cacheRecordId` in
+ * fare-search.ts), so sample prices can never answer a real trip's search.
  *
  * Fixture answers are varied per route so destinations rank differently:
  * prices, times and the price level shift by amounts derived from a hash of
@@ -22,9 +27,9 @@ import { isTestTrip } from './test-seam'
 
 export type FlightsEnv = { ALLOW_DEBUG_ROUTES?: string }
 
-/** True when this trip's searches are answered from the fixture (dev/test only). */
-export function usesFixture(env: FlightsEnv, tripName: unknown): boolean {
-  return isTestTrip(env, tripName)
+/** True when this trip's searches are answered from the fixture: a demo trip, or a `__test-` trip in dev/test. */
+export function usesFixture(env: FlightsEnv, tripName: unknown, isDemo: unknown = 0): boolean {
+  return isDemo === 1 || isTestTrip(env, tripName)
 }
 
 /**
@@ -44,9 +49,9 @@ export async function searchFlights(
   env: FlightsEnv,
   request: SerpapiFlightsRequest,
   tripName: string,
-  options: { fixtureDelayMs?: number } = {},
+  options: { fixtureDelayMs?: number; isDemo?: unknown } = {},
 ): Promise<FlightsAnswer> {
-  if (usesFixture(env, tripName)) {
+  if (usesFixture(env, tripName, options.isDemo)) {
     const delay = options.fixtureDelayMs ?? FIXTURE_DELAY_MS
     if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay))
     return { result: { success: true, data: fixtureResponse(request) }, source: 'fixture' }
@@ -153,7 +158,7 @@ export function fixtureResponse(request: SerpapiFlightsRequest): Record<string, 
     outbound_date: request.outbound_date,
     return_date: request.return_date,
   }
-  raw._note = 'FIXTURE (dev/test only): the hand-made sample rewritten for this route by src/server/flights-source.ts.'
+  raw._note = 'FIXTURE (demo trips and dev/test only): the hand-made sample rewritten for this route by src/server/flights-source.ts.'
   return raw
 }
 

@@ -13,9 +13,12 @@
  *   unless the platform says billing was released.
  * - The address is read from the recipient's `users` row here and handed
  *   straight to the message builder; it's never stored, logged or returned.
+ * - Demo trips never send (SPEC §14). The callers skip them before getting
+ *   here; this refuses them too, as a backstop.
  */
 import type { ActionTools } from 'deepspace/worker'
 import { emailsAllowed, usageDay, usageKeys } from '../lib/caps'
+import { isDemoTrip } from '../lib/demo'
 import { isEmailAddress, type EmailMessage } from '../lib/email'
 import { LIMITS, type Limits } from '../lib/limits'
 import { isGhostId } from '../lib/types'
@@ -90,6 +93,7 @@ export async function deliverOnce(
   const limits = deps.limits ?? LIMITS
   const send = deps.send ?? sendEmail
   const tripId = trip.id
+  if (isDemoTrip(trip.data)) throw new Error('deliverOnce: emails are off in demo trips')
   const mocked = emailIsMocked(env, trip.data.name)
 
   const { records: claims } = must(await tools.query('emailLog', { where: { key: claim.key }, limit: 1 }), 'read email log')

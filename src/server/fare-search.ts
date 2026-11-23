@@ -226,7 +226,8 @@ async function search(
   const searchFlights = deps.searchFlights ?? defaultSearchFlights
   const watch = payload.mode === 'watch'
   const tripId = trip.id
-  const fixture = usesFixture(env, trip.data.name)
+  // Demo trips (any env) and `__test-` trips (dev/test only) get fixture answers, never a real call.
+  const fixture = usesFixture(env, trip.data.name, trip.data.isDemo)
   const memberIds = [...trip.data.memberIds]
   const day = usageDay(now())
 
@@ -410,7 +411,10 @@ async function search(
       calls++
       let answer: Awaited<ReturnType<typeof searchFlights>>
       try {
-        answer = await searchFlights(tools, env, group.request, trip.data.name, { fixtureDelayMs: deps.fixtureDelayMs })
+        answer = await searchFlights(tools, env, group.request, trip.data.name, {
+          fixtureDelayMs: deps.fixtureDelayMs,
+          isDemo: trip.data.isDemo,
+        })
       } catch (err) {
         answer = { result: { success: false, error: err instanceof Error ? err.message : String(err) }, source: fixture ? 'fixture' : 'live' }
       }

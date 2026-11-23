@@ -129,7 +129,7 @@ describe('lockTrip', () => {
     )
     expect(tripRow(tripId).data).toMatchObject({ status: 'locked', lockedIata: 'BNA' })
     expect(res.alreadyLocked).toBe(false)
-    expect(res.emails).toEqual({ sent: 2, alreadySent: 0, noEmail: 0, capped: 0, failed: 0, mocked: false })
+    expect(res.emails).toEqual({ sent: 2, alreadySent: 0, noEmail: 0, capped: 0, failed: 0, mocked: false, emailsOff: false })
     expect(sent.map((m) => m.to).sort()).toEqual(['alice@example.test', 'bob@example.test'])
     // Each person gets their own fare and link, nobody else's.
     const bob = sent.find((m) => m.to === 'bob@example.test')!
@@ -253,7 +253,7 @@ describe('lockTrip', () => {
   it('dev/test seam: __test- trips build the emails but never call email/send, and spend nothing', async () => {
     const { tripId } = await ready('__test-lock')
     const res = data<{ emails: Record<string, unknown> }>(await call(lockTrip, ALICE, { tripId, iata: 'BNA' }, TEST_ENV))
-    expect(res.emails).toEqual({ sent: 2, alreadySent: 0, noEmail: 0, capped: 0, failed: 0, mocked: true })
+    expect(res.emails).toEqual({ sent: 2, alreadySent: 0, noEmail: 0, capped: 0, failed: 0, mocked: true, emailsOff: false })
     expect(store.integrationCalls).toEqual([])
     expect(usageCount(usageKeys.emailTrip(tripId))).toBe(0)
     // Dedupe still applies.

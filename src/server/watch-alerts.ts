@@ -10,8 +10,10 @@
  *   so only the first crossing is ever emailed.
  * - Every send goes through `deliverOnce`: claim first, caps per email,
  *   mocked in dev/test for `__test-` trips.
+ * - Demo trips send nothing and report `emailsOff` (SPEC §14).
  */
 import type { ActionTools } from 'deepspace/worker'
+import { isDemoTrip } from '../lib/demo'
 import { appUrlFor, buildDropEmail, buildUnderBudgetEmail, dropEmailKey, underBudgetEmailKey } from '../lib/email'
 import type { FareRow } from '../lib/results'
 import type { BudgetCrossing, GroupDrop } from '../lib/watch'
@@ -24,6 +26,8 @@ export interface WatchEmailReport {
   group: DeliveryCounts
   private: DeliveryCounts
   mocked: boolean
+  /** True on a demo trip: no alert was built, claimed or sent (SPEC §14). */
+  emailsOff: boolean
 }
 
 export interface DestinationDrop {
@@ -51,7 +55,13 @@ export async function sendWatchEmails(
   alerts: WatchAlerts,
   deps: DeliveryDeps = {},
 ): Promise<WatchEmailReport> {
-  const report: WatchEmailReport = { group: emptyCounts(), private: emptyCounts(), mocked: emailIsMocked(env, trip.data.name) }
+  if (isDemoTrip(trip.data)) return { group: emptyCounts(), private: emptyCounts(), mocked: false, emailsOff: true }
+  const report: WatchEmailReport = {
+    group: emptyCounts(),
+    private: emptyCounts(),
+    mocked: emailIsMocked(env, trip.data.name),
+    emailsOff: false,
+  }
   if (alerts.drops.length === 0 && alerts.crossings.length === 0) return report
 
   const tripId = trip.id
