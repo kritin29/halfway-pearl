@@ -143,6 +143,7 @@ const ACTIONS = [
   'lockTrip',
   'setWatch',
   'checkFaresNow',
+  'createDemoTrip',
   '__testLockTrip',
 ]
 

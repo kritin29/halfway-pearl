@@ -47,7 +47,7 @@ export function seatOrder<T extends { recordId: string; createdAt: string }>(row
 }
 
 /** A real traveler's starting row: no airports yet, permissive constraints. */
-function newTravelerRow(tripId: string, memberIds: string[], userId: string, displayName: string): TravelerData {
+export function newTravelerRow(tripId: string, memberIds: string[], userId: string, displayName: string): TravelerData {
   return {
     tripId,
     memberIds,
@@ -196,6 +196,7 @@ export const previewInvite = defineAction<Env>('previewInvite', async ({ userId,
     maxTravelers: LIMITS.maxTravelers,
     locked: found.data.status === 'locked',
     full: travelers.length >= LIMITS.maxTravelers,
+    isDemo: found.data.isDemo === 1,
     alreadyMember,
     tripId: alreadyMember ? found.recordId : null,
   })

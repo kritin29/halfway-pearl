@@ -3,6 +3,7 @@
  * checks below are the only checks.
  */
 import type { Env } from '../../worker'
+import { isDemoTrip } from '../lib/demo'
 import { flag, iata, recordId } from '../lib/validate'
 import { sendLockEmails, type LockEmailReport } from '../server/lock-emails'
 import { defineAction, fail, loadTrip, must, ok, requireOrganizer } from '../server/trip-access'
@@ -14,6 +15,7 @@ import { defineAction, fail, loadTrip, must, ok, requireOrganizer } from '../ser
  *
  * Calling it again for the SAME destination on a locked trip is the retry:
  * it sends only the emails that haven't gone out yet (emailLog claims).
+ * A demo trip locks the same way but sends nothing (`emails.emailsOff`).
  */
 export const lockTrip = defineAction<Env>('lockTrip', async ({ userId, params, tools, env }) => {
   const tripId = recordId(params.tripId, 'Trip')
@@ -70,7 +72,7 @@ export const lockTrip = defineAction<Env>('lockTrip', async ({ userId, params, t
   return ok({ tripId: tripId.value, iata: code.value, alreadyLocked, emails })
 })
 
-/** Turn the daily fare watch on or off (SPEC §3.9). The cron watches only trips with it on. */
+/** Turn the daily fare watch on or off (SPEC §3.9). The cron watches only trips with it on; never demo trips. */
 export const setWatch = defineAction<Env>('setWatch', async ({ userId, params, tools }) => {
   const tripId = recordId(params.tripId, 'Trip')
   if (!tripId.ok) return fail('invalid_params', tripId.error)
@@ -78,6 +80,9 @@ export const setWatch = defineAction<Env>('setWatch', async ({ userId, params, t
   if (!enabled.ok) return fail('invalid_params', enabled.error)
   const access = await requireOrganizer(tools, tripId.value, userId)
   if (!access.ok) return access.result
+  if (isDemoTrip(access.trip.data)) {
+    return fail('demo_trip', 'Demo trips aren’t watched daily. Use “Check fares now” to re-check the sample prices.')
+  }
   must(await tools.update('trips', tripId.value, { watchEnabled: enabled.value }), 'set watch')
   return ok({ tripId: tripId.value, watchEnabled: enabled.value })
 })

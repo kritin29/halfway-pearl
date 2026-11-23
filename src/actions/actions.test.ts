@@ -52,7 +52,7 @@ afterEach(() => {
 })
 
 describe('registry', () => {
-  it('exposes exactly the phase 3-7 actions', () => {
+  it('exposes exactly the phase 3-7 actions plus createDemoTrip', () => {
     expect(Object.keys(actions).sort()).toEqual(
       [
         '__testLockTrip',
@@ -60,6 +60,7 @@ describe('registry', () => {
         'addGhost',
         'addMidpointHubs',
         'checkFaresNow',
+        'createDemoTrip',
         'createTrip',
         'joinTrip',
         'lockTrip',
@@ -390,6 +391,7 @@ describe('previewInvite', () => {
       maxTravelers: 8,
       locked: false,
       full: false,
+      isDemo: false,
       alreadyMember: false,
       tripId: null,
     })

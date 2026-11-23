@@ -11,9 +11,11 @@
  * isn't counted (`enqueue_failed`).
  */
 import { enqueueJob } from 'deepspace/worker'
+import type { ActionResult, ActionTools } from 'deepspace/worker'
 import type { Env } from '../../worker'
 import { knownHomeAirports } from '../lib/airports'
 import { decideRunStart, usageDay, usageKeys } from '../lib/caps'
+import { isDemoTrip } from '../lib/demo'
 import { LIMITS } from '../lib/limits'
 import { recordId } from '../lib/validate'
 import { isTestTrip } from '../server/test-seam'
@@ -51,9 +53,28 @@ export const startSearch = defineAction<Env>('startSearch', async ({ userId, par
   const candidates = await queryCandidates(tools, tripId.value)
   if (candidates.length === 0) return fail('needs_candidates', 'Add at least one destination first.')
 
-  // Caps, from the ledger. In dev/test only, `__test-` trips (answered from the
-  // fixture, so nothing is spent) skip the per-user and global budgets; the
-  // per-trip limit still applies so tests can prove it.
+  return beginFullSearch(tools, env, trip, userId, now)
+})
+
+/**
+ * The part of startSearch after its checks: caps → count → status
+ * 'searching' → enqueue → store `searchJobId` (rolled back if enqueueing
+ * fails). Also used by createDemoTrip, so a demo trip's first search runs
+ * the same pipeline.
+ *
+ * Fixture-answered trips spend nothing, so they skip the per-user and global
+ * budgets: `__test-` trips in dev/test only, and demo trips everywhere. The
+ * per-trip limit still applies so tests can prove it. Demo trips also don't
+ * add to the user's "distinct trips searched today", so trying demos never
+ * uses up a user's real searches.
+ */
+export async function beginFullSearch(
+  tools: ActionTools,
+  env: Env,
+  trip: Trip,
+  userId: string,
+  now: Date,
+): Promise<ActionResult<{ jobId: string }>> {
   const day = usageDay(now)
   const keys = {
     global: usageKeys.serpapiGlobal(),
@@ -62,19 +83,21 @@ export const startSearch = defineAction<Env>('startSearch', async ({ userId, par
     userTrip: usageKeys.userSearchedTrip(userId, trip.id),
   }
   const counts = await getUsageCounts(tools, day, Object.values(keys))
-  const test = isTestTrip(env, trip.data.name)
+  const demo = isDemoTrip(trip.data)
+  const exempt = demo || isTestTrip(env, trip.data.name)
   const already = counts[keys.userTrip] > 0
   const decision = decideRunStart('full', {
-    globalSerpapiCallsToday: test ? 0 : counts[keys.global],
+    globalSerpapiCallsToday: exempt ? 0 : counts[keys.global],
     tripFullSearchesToday: counts[keys.trip],
     tripWatchChecksToday: 0,
-    userTripsSearchedToday: test ? 0 : counts[keys.user],
+    userTripsSearchedToday: exempt ? 0 : counts[keys.user],
     userAlreadySearchedThisTripToday: already,
   })
   if (!decision.ok) return fail('cap_reached', decision.message)
 
+  const countUser = !already && !demo
   await incrementUsage(tools, day, keys.trip)
-  if (!already) {
+  if (countUser) {
     await incrementUsage(tools, day, keys.user)
     await incrementUsage(tools, day, keys.userTrip)
   }
@@ -110,7 +133,7 @@ export const startSearch = defineAction<Env>('startSearch', async ({ userId, par
     console.error(`[action] startSearch: enqueue failed: ${err instanceof Error ? err.message : String(err)}`)
     must(await tools.update('trips', trip.id, before), 'roll back search')
     await incrementUsage(tools, day, keys.trip, -1)
-    if (!already) {
+    if (countUser) {
       await incrementUsage(tools, day, keys.user, -1)
       await incrementUsage(tools, day, keys.userTrip, -1)
     }
@@ -119,7 +142,7 @@ export const startSearch = defineAction<Env>('startSearch', async ({ userId, par
 
   must(await tools.update('trips', trip.id, { searchJobId: jobId }), 'store job id')
   return ok({ jobId })
-})
+}
 
 /**
  * checkFaresNow (SPEC §6): the organizer runs the fare watch on demand, the
@@ -130,8 +153,9 @@ export const startSearch = defineAction<Env>('startSearch', async ({ userId, par
  *   checks per trip per day, shared with the cron; global SerpApi budget)
  *   → count it → mark `watchQueuedAt` → enqueue.
  *
- * In dev/test only, `__test-` trips (fixture answers, nothing spent) skip
- * the global budget; the per-trip limit still applies.
+ * Fixture-answered trips (nothing spent) skip the global budget: `__test-`
+ * trips in dev/test only, and demo trips everywhere (SPEC §14). The per-trip
+ * limit still applies.
  */
 export const checkFaresNow = defineAction<Env>('checkFaresNow', async ({ userId, params, tools, env }) => {
   const tripId = recordId(params.tripId, 'Trip')
@@ -153,9 +177,9 @@ export const checkFaresNow = defineAction<Env>('checkFaresNow', async ({ userId,
   const day = usageDay(now)
   const keys = { global: usageKeys.serpapiGlobal(), watch: usageKeys.watchTrip(trip.id) }
   const counts = await getUsageCounts(tools, day, Object.values(keys))
-  const test = isTestTrip(env, trip.data.name)
+  const exempt = isDemoTrip(trip.data) || isTestTrip(env, trip.data.name)
   const decision = decideRunStart('watch', {
-    globalSerpapiCallsToday: test ? 0 : counts[keys.global],
+    globalSerpapiCallsToday: exempt ? 0 : counts[keys.global],
     tripFullSearchesToday: 0,
     tripWatchChecksToday: counts[keys.watch],
     userTripsSearchedToday: 0,

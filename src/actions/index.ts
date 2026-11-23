@@ -1,6 +1,7 @@
 import type { ActionHandler } from 'deepspace/worker'
 import type { Env } from '../../worker'
 import { addCandidate, addMidpointHubs, removeCandidate, suggestCandidates } from './candidates'
+import { createDemoTrip } from './demo'
 import { addGhost, removeGhost, updateGhost } from './ghosts'
 import { lockTrip, setWatch } from './lock'
 import { checkFaresNow, startSearch } from './search'
@@ -13,6 +14,7 @@ import { toggleVote } from './votes'
  */
 export const actions: Record<string, ActionHandler<Env>> = {
   createTrip,
+  createDemoTrip,
   joinTrip,
   previewInvite,
   addGhost,

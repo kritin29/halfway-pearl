@@ -38,6 +38,8 @@ export type ErrorCode =
   // Fare watch (src/actions/search.ts checkFaresNow)
   | 'watch_running'
   | 'watch_ended'
+  // Demo trips (src/actions/demo.ts, SPEC §14)
+  | 'demo_trip'
 
 export type Failure = { success: false; error: string; code: ErrorCode }
 
