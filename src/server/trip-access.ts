@@ -53,12 +53,25 @@ export function fail(code: ErrorCode, error: string): Failure {
 
 export const NOT_FOUND_TRIP = (): Failure => fail('not_found', 'Trip not found.')
 
-/** Thrown inside an action when a storage call fails unexpectedly; `defineAction` turns it into `server_error`. */
-export class ToolError extends Error {}
+/**
+ * Thrown when a storage call fails unexpectedly; `defineAction` turns it into
+ * `server_error`. `step` is the code label passed to `must()`; the message also
+ * carries the storage error, which can echo stored values, so the cron and job
+ * boundaries replace it with `genericFailure` (src/lib/safe-error.ts).
+ */
+export class ToolError extends Error {
+  override name = 'ToolError'
+  constructor(
+    readonly step: string,
+    detail: string,
+  ) {
+    super(`${step}: ${detail}`)
+  }
+}
 
 /** Unwrap a tools result or throw `ToolError` (message is logged, never returned to the client). */
 export function must<T>(result: ActionResult<T>, what: string): T {
-  if (!result.success) throw new ToolError(`${what}: ${result.error}`)
+  if (!result.success) throw new ToolError(what, result.error)
   return result.data
 }
 

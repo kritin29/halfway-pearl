@@ -14,6 +14,7 @@ import { enqueueJob } from 'deepspace/worker'
 import type { ActionTools } from 'deepspace/worker'
 import type { Env } from '../../worker'
 import { usageKeys } from '../lib/caps'
+import { safeErrorText } from '../lib/safe-error'
 import { must, type Trip } from './trip-access'
 import { incrementUsage } from './usage'
 
@@ -41,7 +42,7 @@ export async function enqueueWatchRun(
     )
     return { ok: true, jobId }
   } catch (err) {
-    console.error(`[watch] enqueue failed for trip ${trip.id}: ${err instanceof Error ? err.message : String(err)}`)
+    console.error(`[watch] enqueue failed for trip ${trip.id}: ${safeErrorText(err)}`)
     must(await tools.update('trips', trip.id, before), 'roll back watch')
     for (const key of keys) await incrementUsage(tools, opts.day, key, -1)
     return { ok: false }

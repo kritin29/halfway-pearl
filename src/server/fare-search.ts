@@ -54,6 +54,7 @@ import {
   type SerpapiFlightsRequest,
 } from '../lib/flights'
 import { LIMITS, type Limits } from '../lib/limits'
+import { safeErrorText } from '../lib/safe-error'
 import { aggregateCandidate, type RankFare, type RankTraveler } from '../lib/ranking'
 import type { FareRow } from '../lib/results'
 import { isGhostId, type TripData } from '../lib/types'
@@ -199,7 +200,7 @@ export async function runFareSearch(job: Job, ctx: JobContext, deps: FareSearchD
   } catch (err) {
     const final = job.attempts >= job.maxAttempts
     console.error(
-      `[fare-search] ${payload.mode} trip ${trip.id} attempt ${job.attempts}/${job.maxAttempts} failed: ${err instanceof Error ? err.message : String(err)}`,
+      `[fare-search] ${payload.mode} trip ${trip.id} attempt ${job.attempts}/${job.maxAttempts} failed: ${safeErrorText(err)}`,
     )
     try {
       if (payload.mode === 'watch') {
@@ -207,7 +208,7 @@ export async function runFareSearch(job: Job, ctx: JobContext, deps: FareSearchD
       } else if (final) await giveUp(tools, trip.id)
       else await tools.update('trips', trip.id, { searchMessage: 'Something went wrong. Retrying…' })
     } catch (inner) {
-      console.error(`[fare-search] trip ${trip.id} could not record the failure: ${String(inner)}`)
+      console.error(`[fare-search] trip ${trip.id} could not record the failure: ${safeErrorText(inner)}`)
     }
     throw err
   }
