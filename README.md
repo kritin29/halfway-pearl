@@ -33,6 +33,7 @@ Halfway is the coordination layer. Flight search is one component of it.
 - **Approval voting** with a live tally, then the organizer **locks** a destination: every real member gets an email with their own fare and Google Flights link, and the Book tab shows a live checklist.
 - **Daily fare watch.** Every morning at 8:00 (America/Chicago) the shortlist (the locked city, or the top 3 by votes) is re-checked. A group-total drop of at least max($50, 5%) emails everyone; your own fare dropping under your budget emails only you (once per destination). "Check fares now" runs the same check on demand. A sparkline shows the group total over time.
 - **A "next step" guide** on every trip (airports → destinations → fares → vote → lock → book) that follows the trip's state live.
+- **Demo trips.** "Try a demo trip" on Trips opens a ready-made trip with sample prices, labelled as such everywhere (see [Demo mode](#demo-mode)).
 - **Graceful provider outages.** If the flight-data provider is out of quota, the trip shows a plain-language banner, nothing is retried in a loop, a search the outage stopped before anything was fetched or billed is given back to the daily limit, and the rest of the app keeps working.
 
 ## How to use it
@@ -45,6 +46,21 @@ Halfway is the coordination layer. Flight search is one component of it.
 6. On **Book**, open your Google Flights link, book, and tick "I've booked my flight". The fare watch keeps running until the day before departure.
 
 The guide at the top of each trip always says which of these steps is next.
+
+## Demo mode
+
+**Why it exists.** Halfway gets flight prices from SerpApi (Google Flights) through the DeepSpace platform. For this entire build, the platform's shared SerpApi account has been out of searches: every real call (Nov 20, a retry on Nov 21, and another on Nov 23) came back `SerpAPI error 429: "Your account has run out of searches."` (billing released, so nothing was charged). That isn't a bug in Halfway, but it means a reviewer pressing **Find fares** on a real trip sees the provider-outage banner and no prices. Demo mode exists so the rest of the product can still be seen working. It is not a substitute for live fares, and it says so on every screen.
+
+**What it does.** On **Trips**, press **Try a demo trip**. You get a trip where you're the organizer flying from Chicago (ORD), with two ghost travelers, Sam in Boston and Priya in Denver, four destinations (Austin, Nashville, San Diego, Miami), and the normal fare search already running. Results arrive in a few seconds. From there everything is the real app: the three rankings, voting, locking, the Book tab and its checklist, "Check fares now". You can also edit your own airport and settings and press Find fares again.
+
+**What's different, and how it's enforced:**
+
+- **Sample prices, never live ones.** A demo trip's fares come from a saved, hand-made SerpApi-format fixture (`src/lib/__fixtures__/serpapi-flights-sample.json`), rewritten per route so destinations rank differently. The fare-search job never calls `serpapi/flights` for a demo trip, in any environment. Sample answers are cached only under that trip's own keys, so a demo price can never show up on a real trip.
+- **Labelled everywhere.** "Demo trip: sample prices, not live fares." is on the trip banner (above every tab), every result card, every Book tab card, the fare-watch card, the trip's card on **Trips**, and the invite page.
+- **No email, ever.** Locking, "Email booking links again" and fare-watch alerts send nothing for a demo trip, and the UI says "Emails are off in demo trips." The email sender also refuses demo trips outright, as a backstop.
+- **Not watched daily.** The morning cron skips demo trips, and the daily switch is hidden; "Check fares now" re-checks the sample prices. They're fixed per route, so the sparkline stays flat.
+- **Only the server can make one.** `trips.isDemo` is set by the `createDemoTrip` action alone, is immutable after creation, and clients can't write trips at all.
+- **Capped.** 3 demo trips per user per day. They cost nothing, but the cap stops anyone from flooding storage.
 
 ## Architecture
 
@@ -92,6 +108,7 @@ Every action loads the trip, checks the caller is a member (or the organizer), v
 | Action | Who | What |
 |---|---|---|
 | `createTrip`, `previewInvite`, `joinTrip` | signed in | create; preview an invite (name/dates only); join (idempotent, max 8, not once locked) and propagate `memberIds` to every trip row |
+| `createDemoTrip` | signed in | a demo trip (sample fares, no emails), 3 per user per day; starts the normal search |
 | `addGhost`, `updateGhost`, `removeGhost` | organizer | ghost travelers (and ticking a ghost as booked) |
 | `addCandidate` | member | search-and-add a destination |
 | `suggestCandidates`, `addMidpointHubs`, `removeCandidate` | organizer | AI ideas, geographic middle, remove (with its fares, votes, snapshots) |
@@ -113,7 +130,7 @@ The job is idempotent (deterministic row ids), so a JobRoom retry can't duplicat
 
 ### The cron (`src/cron.ts`)
 
-`fare-watch` at `0 8 * * *` America/Chicago: trips with the watch on, status results or locked, departing more than a day from now; soonest first, at most 10 per run; once per trip per day; subject to the same caps as "Check fares now". It enqueues watch runs of the same job.
+`fare-watch` at `0 8 * * *` America/Chicago: trips with the watch on (never demo trips), status results or locked, departing more than a day from now; soonest first, at most 10 per run; once per trip per day; subject to the same caps as "Check fares now". It enqueues watch runs of the same job.
 
 ### Integrations
 
@@ -155,6 +172,7 @@ All caps live in `src/lib/limits.ts` and are checked (in `usage`) **before** any
 | AI suggestions per user per day | 5 | ≈ $0.003 per user per day |
 | Emails per trip per day / whole app per day | 20 / 100 | **$1.30/day** |
 | Trips created per user per day | 10 | (abuse cap; free) |
+| Demo trips created per user per day | 3 | (abuse cap; demo trips make no paid calls) |
 
 Plus: a 6-hour route cache shared across trips, one call per identical set of home airports, $0 home pairs, at most 6 destinations × 8 travelers, and no retry on provider outages. A 3-traveler × 4-destination search makes at most 12 calls ($0.39); a repeat within 6 hours makes none. Counters are soft by ±1 under concurrency (get-then-update), which the caps' size absorbs.
 
@@ -162,9 +180,9 @@ Plus: a 6-hour route cache shared across trips, one call per identical set of ho
 
 | Suite | Command | What it covers |
 |---|---|---|
-| Unit (Vitest) | `npx deepspace test run unit` | Pure logic: fare parsing and constraint filtering against a saved fixture, ranking and the 3-budget guard, caps and the refund rule, fare-watch decisions (shortlist, drop threshold, first crossing), email templates (no budget, escaping, one recipient), validation, the next-step guide. Server code against a fake store: every action's membership/organizer checks, the fare-search job (dedupe, cache, caps, outages, retries, mid-run joins), lock and watch emails (dedupe, caps, mocked seam), the cron, and the schema permission matrix (incl. `budgets` own-only and `usage` all-false) |
+| Unit (Vitest) | `npx deepspace test run unit` | Pure logic: fare parsing and constraint filtering against a saved fixture, ranking and the 3-budget guard, caps and the refund rule, fare-watch decisions (shortlist, drop threshold, first crossing), email templates (no budget, escaping, one recipient), validation, the next-step guide. Server code against a fake store: demo trips (never reach `serpapi/flights` or `email/send` even with the production code path, the flag can't be set by clients or changed later, the 3/day cap, excluded from the cron, demo prices never reach a real trip), every action's membership/organizer checks, the fare-search job (dedupe, cache, caps, outages, retries, mid-run joins), lock and watch emails (dedupe, caps, mocked seam), the cron, and the schema permission matrix (incl. `budgets` own-only and `usage` all-false) |
 | Smoke + API | `npx deepspace test run` | Static landing (no auth call, no websocket, real content and title), nav, 404, `/home` redirect; every action → 401 without a token and not-found for non-members; **403 on the browser integration proxy** for server-only integrations; job/cron socket lockdown; **one real AI call** and **one real `email/send` call** |
-| E2E (two users) | `npx deepspace test run e2e` | Create → invite → join with live updates; budget privacy; non-member can't see a trip; destinations live; fare search with live progress, ranking tabs and votes; lock → emails (mocked) → live booked checklist; fare watch (check now → snapshot → both sparklines update live, cap refusal, toggle); the next-step guide through all six stages on the solo path; a failed invite lookup retries without reloading the page |
+| E2E (two users) | `npx deepspace test run e2e` | Create → invite → join with live updates; budget privacy; non-member can't see a trip; destinations live; fare search with live progress, ranking tabs and votes; lock → emails (mocked) → live booked checklist; fare watch (check now → snapshot → both sparklines update live, cap refusal, toggle); the next-step guide through all six stages on the solo path; a solo **demo trip** from the real button (results, sorting, vote, lock with emails off, check fares, the label on every screen, client can't write `isDemo`); a failed invite lookup retries without reloading the page |
 
 Rules followed: at most one real call per integration per run, never in loops; mocks only at the integration boundary. Playwright can't intercept worker-side calls, so `__test-` trips are answered from the saved SerpApi fixture and have their emails built but not sent, **only** when `ALLOW_DEBUG_ROUTES === 'true'` (set by `deepspace dev`/`test run`, never in production). A unit test proves the real path is taken without the flag.
 
@@ -184,17 +202,20 @@ npx tsc --noEmit && npx eslint .
 
 git commit …                    # deploy ships the working tree, so commit first
 npx deepspace deploy            # → https://halfway-pearl.app.space
-npx deepspace logs --search cron   # after 08:00 CT: "[cron] fare-watch ok"
+# Cron proof: the CronRoom's run history, not the logs (alarm-time output isn't in `deepspace logs`).
+# A read-only socket to wss://halfway-pearl.app.space/ws/cron/app:<DEEPSPACE_APP_ID> receives
+# `cron.tasks` (lastRunAt, nextRunAt) and `cron.history`.
 ```
 
 Source control is plain Git with GitHub as the source of truth (the DeepSpace cloud repo commands are not used).
 
 ## Known limitations
 
-- **SerpApi quota outage during development.** Every real `serpapi/flights` call so far (Phase 2 and a retry later) returned `SerpAPI error 429: "Your account has run out of searches."` with billing released. No real flight response has been seen.
+- **SerpApi quota outage during development.** Every real `serpapi/flights` call so far (Nov 20, Nov 21, Nov 23) returned `SerpAPI error 429: "Your account has run out of searches."` with billing released. No real flight response has been seen; [demo mode](#demo-mode) exists because of this.
 - **The flight parser is built from SerpApi's published docs**, tested against a **hand-made** fixture that follows them, and not yet checked against a real response. The first real search in production is the first real check; the field names (`best_flights`, `other_flights`, `price_insights`, `layovers`, times) should be cross-checked then.
 - **Concurrency is tested with fakes.** Concurrent joins, the 6-destination limit under two writers, the email claim pattern and job retries are tested with a fake store and a fake job context, not against the real Durable Objects under load. Spend counters are soft by ±1.
-- **The cron hasn't run on a deployed app.** It's unit-tested, and the same job runs in e2e through "Check fares now".
+- **The cron has run once on the deployed app** (2026-11-23 08:00 CT, success, per the CronRoom history). It first deployed after the Nov 22 slot had passed. With the quota out, no watched trip can get new prices yet.
+- **Demo prices are illustrative.** They come from a hand-made fixture, not observed fares, and are fixed per route, so a demo never shows a price drop.
 - **Real email delivery is unconfirmed.** The one real send was accepted by the platform, but the test address is on the reserved `@deepspace.test` domain.
 - **Read access by `createdBy`.** On collections without an `ownerField` (candidates, fares, fareSnapshots), the row's creator keeps read access. Harmless today because nobody can leave a trip.
 - **Times are outbound-only** (return legs need a second request per itinerary), so red-eye and arrival alignment use the outbound flight; prices are round-trip.

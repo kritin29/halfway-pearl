@@ -93,6 +93,7 @@ All trip-scoped collections include `tripId` (text) and `memberIds` (text, `{kin
 | searchMessage | text | e.g. "Checked ORD→BNA"; never contains budgets |
 | searchError | text | nullable; set when the job fails for good |
 | watchQueuedAt | datetime | nullable; set (before enqueueing) by `checkFaresNow`/the cron, cleared by the watch run. A value older than 20 min counts as lost |
+| isDemo | number 0/1 | default 0, **immutable**; set to 1 only by `createDemoTrip` (§14). Clients can't write trips at all |
 | watchError | text | nullable; why the last watch run couldn't check everything (provider down, cap, errors, failure). Never budgets |
 
 `uniqueOn: ['inviteCode']`. Permissions: `member: { read: 'collaborator', create: false, update: false, delete: false }`, admin: same as member. (All writes via actions.)
@@ -232,7 +233,8 @@ Payload `{ tripId, mode: 'full' | 'watch', countedOn?: 'YYYY-MM-DD' }` (`counted
 
 `{ name: 'fare-watch', schedule: '0 8 * * *', timezone: 'America/Chicago' }` (`src/cron.ts` → `src/server/fare-watch-cron.ts`) → query trips with `where: { watchEnabled: 1 }` (equality only), then filter status in (results, locked) and outboundDate more than 1 calendar day after today (the Chicago date) in code (`selectWatchTrips`) → soonest departure first, max 10 trips per run → per trip: skip if a watch run is already queued, skip if today's marker `watch:cron:trip:<id>` is set, skip if `decideRunStart('watch')` refuses (3 watch checks per trip per day, shared with "Check fares now"; global SerpApi budget) → count the check, set the marker and `watchQueuedAt`, enqueue `fare-search` `{mode:'watch', countedOn}` (all rolled back if enqueue throws). Logs counts only. Uses `createAppTools(env, env.OWNER_USER_ID)`.
 **Watching stops automatically** once the outbound date is ≤ 1 day away: the cron skips the trip, the job skips a run that slipped through, `checkFaresNow` refuses (`watch_ended`) and the Book tab says so. `watchEnabled` itself isn't changed.
-Arming: the scaffold's `armCronRoom` middleware and deploy's own wake-up request arm the alarm automatically. Proof of execution is `deepspace logs --search cron` → `[cron] fare-watch ok`.
+Demo trips (§14) are never watched: `selectWatchTrips` drops `isDemo = 1` before the per-run maximum, and the loop re-checks the fresh row.
+Arming: the scaffold's `armCronRoom` middleware and deploy's own wake-up request arm the alarm automatically. **Proof of execution is the CronRoom's run history**, not the logs: the first real run (2026-11-23 14:00 UTC, success, 253 ms) left no `[cron] fare-watch ok` line in `deepspace logs` (NOTES D1). Read the history read-only over `wss://<app>/ws/cron/app:<DEEPSPACE_APP_ID>` (an anonymous socket gets the `viewer` role and receives `cron.tasks` with `lastRunAt`/`nextRunAt`, then `cron.history`).
 **Room lockdown (NOTES C7):** `/ws/cron/:roomId` and `/ws/jobs/:roomId` return 404 unless `roomId === \`app:${env.DEEPSPACE_APP_ID}\``, because any other id would spin up an extra CronRoom with its own fare-watch schedule. The cron route's role resolver returns `admin` only for admins and `viewer` for everyone else, so members can't trigger owner-billed tasks.
 
 ## 10. Screens (mobile-first)
@@ -275,6 +277,20 @@ Arming: the scaffold's `armCronRoom` middleware and deploy's own wake-up request
 ## 13. Stretch (only after acceptance criteria pass)
 
 Hotels total (`serpapi/hotels`), flexible dates (±1 day), MapLibre map of origins/candidates, "nudge unbooked" reminders, leave trip, organizer can delete a trip (`trips` is `delete: false` for every role today, so this needs a `deleteTrip` action that cascades every trip-scoped row).
+
+---
+
+## 14. Demo mode (Phase 9)
+
+Why: live fares have been unavailable for the whole build. Every real `serpapi/flights` call (Phase 2, the Phase 5 retry, the Phase 9 retry on 2026-11-23) came back `SerpAPI error 429: "Your account has run out of searches."` with billing released. That's the platform's shared SerpApi quota, not this app's request. Demo mode lets a reviewer see the full flow with sample prices, clearly labelled.
+
+- **`createDemoTrip({})`** (any signed-in user, `src/actions/demo.ts`): creates a trip for the caller with `isDemo = 1`, `watchEnabled = 0`, name "Demo trip: long weekend", outbound = the first Friday ≥ 35 days out, back Sunday. Caller is organizer flying from ORD; ghosts Sam (BOS) and Priya (DEN); destinations AUS, BNA, SAN, MIA (`src/lib/demo.ts`). Then `beginFullSearch` (the same tail as `startSearch`) enqueues the normal `fare-search` job. If enqueueing fails the trip still exists (`searchStarted: false`) and "Find fares" retries. Every other param is ignored.
+- **Cap:** 3 demo trips per user per UTC day (`demo:created:user:<id>`, ledger fails closed), `cap_reached`. Separate from the 10/day trip cap. Dev/test seam: a `testName` starting `__test-` is honoured only with `ALLOW_DEBUG_ROUTES === 'true'` (names the trip, skips the cap).
+- **Fares:** `usesFixture(env, name, isDemo)` is true for `isDemo === 1` in every environment, so a demo trip never reaches `serpapi/flights`. Fixture answers are the saved sample varied per route (§8 fixture seam) and cached only under `fixture|<tripId>|…` keys, so demo prices can never answer a real trip. Demo searches and checks skip the global and per-user SerpApi budgets (they spend nothing), and don't add to the user's "distinct trips searched today". The per-trip limits (2 full searches, 3 watch checks) still apply.
+- **Emails:** never. `sendLockEmails` and `sendWatchEmails` return `emailsOff: true` before reading any address; `deliverOnce` throws on a demo trip as a backstop. The UI says "Emails are off in demo trips." (lock dialog, lock toast, Book tab, fare watch, next-step guide).
+- **Watch:** the cron skips demo trips (§9); `setWatch` refuses them (`demo_trip`); "Check fares now" works with fixture data.
+- **Label:** "Demo trip: sample prices, not live fares." on the trip page banner (above every tab), every result card, every Book tab card, the fare watch card, the `/trips` list card and the invite page.
+- **Flag integrity:** `trips` is `create/update: false` for every client role, and `isDemo` is `immutable`, so not even server code can flip it after creation.
 
 ---
 
@@ -362,3 +378,11 @@ Hotels total (`serpapi/hotels`), flexible dates (±1 day), MapLibre map of origi
 | 49 | Landing content (pitch, how it works, three differentiators), `/trips` "Try it solo" hint, nav = Trips + sign in/out, scaffold `/settings` and `/api-status` removed, `/home` forwards to `/trips` | §10 | developer brief |
 | 50 | Trip page "next step" guide (display only; every rule is still enforced by the actions) | §10 | developer brief |
 | 51 | Provider-outage banner explains the outage in plain words under the stored message (SPEC #32 wording unchanged); also used for a watch run's `watchError` | §7 Integration failures, §10 | developer brief |
+
+### 2026-11-23 — Phase 9 (cron check, SerpApi retry, demo mode)
+| # | Change | Where in this spec | From |
+|---|---|---|---|
+| 52 | Cron proof is the CronRoom run history, not logs (the first real run logged nothing) | §9 | observed in production, NOTES D1 |
+| 53 | The approved SerpApi retry still returned the provider 429 (billing released); `flights.ts` remains unverified against a real response (NOTES R7) | §7 Fare selection | Phase 9 retry |
+| 54 | Demo mode: `trips.isDemo` (immutable), `createDemoTrip` (3/user/day), fixture fares in every env for demo trips, no emails, no cron watch, label everywhere | §5 trips, §9, §14 | developer brief |
+| 55 | `startSearch`'s cap/count/enqueue tail extracted as `beginFullSearch` (shared with `createDemoTrip`); new error code `demo_trip` | §6, §14 | Phase 9 build |
