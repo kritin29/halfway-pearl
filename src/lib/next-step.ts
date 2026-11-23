@@ -88,6 +88,14 @@ export function nextStep(t: NextStepInput): NextStep {
   }
 
   if (t.status === 'results') {
+    // Joined after the search: without home airports nobody can price them.
+    if (!t.iHaveAirports) {
+      return step('airports', {
+        title: 'Add your home airports',
+        body: 'You joined after fares were checked. Add your airports, then the organizer can find fares again with you in them.',
+        action: { label: 'Go to Crew', tab: 'crew' },
+      })
+    }
     if (!t.iVoted) {
       return step('vote', {
         title: 'Vote for the places you’d go',

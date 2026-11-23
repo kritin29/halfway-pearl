@@ -6,6 +6,7 @@ import type { Env } from '../../worker'
 import { isDemoTrip } from '../lib/demo'
 import { flag, iata, recordId } from '../lib/validate'
 import { sendLockEmails, type LockEmailReport } from '../server/lock-emails'
+import { queryTravelers } from '../server/trip-rows'
 import { defineAction, fail, loadTrip, must, ok, requireOrganizer } from '../server/trip-access'
 
 /**
@@ -53,6 +54,22 @@ export const lockTrip = defineAction<Env>('lockTrip', async ({ userId, params, t
   if (!alreadyLocked) {
     if (candidate.data.complete !== 1) {
       return fail('incomplete', `Not everyone has a fare to ${destination.city} yet, so it can’t be locked.`)
+    }
+    // `complete` was saved by the last search. Someone who joined (or was added)
+    // since has no fare here, so re-check against today's traveler list.
+    const travelers = await queryTravelers(tools, tripId.value)
+    const { records: fareRows } = must(
+      await tools.query('fares', { where: { tripId: tripId.value, candidateIata: code.value } }),
+      'query fares',
+    )
+    const priced = new Set(fareRows.filter((f) => f.data.status === 'ok').map((f) => String(f.data.travelerId)))
+    const unpriced = travelers.filter((t) => !priced.has(String(t.data.userId)))
+    if (unpriced.length > 0) {
+      const names = unpriced.map((t) => String(t.data.displayName ?? 'A traveler')).join(', ')
+      return fail(
+        'incomplete',
+        `${names} ${unpriced.length === 1 ? 'has' : 'have'} no fare to ${destination.city} yet. Run Find fares again, then lock.`,
+      )
     }
     must(await tools.update('trips', tripId.value, { status: 'locked', lockedIata: code.value }), 'lock trip')
     // Two clicks on different destinations at once: the last write wins, and only its call sends emails.

@@ -74,6 +74,12 @@ describe('nextStep: searching, results, locked', () => {
     expect(s.action?.tab).toBe('results')
   })
 
+  it('results: someone who joined after the search adds airports first', () => {
+    const s = at({ status: 'results', iHaveAirports: false, isOrganizer: false })
+    expect(s.stage).toBe('airports')
+    expect(s.action?.tab).toBe('crew')
+  })
+
   it('results: vote first, then lock (organizer) or wait (member)', () => {
     expect(at({ status: 'results' }).stage).toBe('vote')
     expect(at({ status: 'results', iVoted: true }).title).toBe('Lock the destination')

@@ -117,7 +117,11 @@ export function buildResultCards(input: BuildInput): ResultCard[] {
     })
     const voters = input.votes.filter((v) => v.candidateIata === c.iata).map((v) => v.userId)
     const own = ownLine(people.find((p) => p.isMe)?.fare ?? null, input.myBudget)
-    const complete = c.complete === 1
+    // The saved aggregate predates anyone who joined (or was added) after the
+    // last search: they have no fare row, so the card isn't complete any more.
+    const unpriced = people.filter((p) => !p.fare).map((p) => p.displayName)
+    const complete = c.complete === 1 && unpriced.length === 0
+    const savedMissing = Array.isArray(c.missingFor) ? c.missingFor.filter((n): n is string => typeof n === 'string') : []
     return {
       iata: c.iata,
       city: c.city ?? c.iata,
@@ -129,7 +133,7 @@ export function buildResultCards(input: BuildInput): ResultCard[] {
       minFare: num(c.minFare),
       arrivalSpreadMin: num(c.arrivalSpreadMin),
       fitsAll: c.fitsAll === 1 ? 1 : c.fitsAll === 0 ? 0 : null,
-      missingFor: Array.isArray(c.missingFor) ? c.missingFor.filter((n): n is string => typeof n === 'string') : [],
+      missingFor: c.complete === 1 ? unpriced : savedMissing,
       people,
       priceLevel: cardPriceLevel(people.map((p) => (p.fare?.status === 'ok' && !p.fare.home ? p.fare.priceLevel : 'unknown'))),
       arrival: complete ? arrivalBadge(num(c.arrivalSpreadMin)) : null,

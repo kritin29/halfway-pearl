@@ -310,6 +310,16 @@ describe('lockTrip', () => {
     expect(tripRow(tripId).data.status).toBe('gathering')
   })
 
+  it('refuses a destination saved as complete when someone joined after the search (no fare for them)', async () => {
+    const { tripId, inviteCode } = await ready()
+    data(await call(joinTrip, CAROL, { inviteCode }))
+    const res = await call(lockTrip, ALICE, { tripId, iata: 'BNA' })
+    expect(res).toMatchObject({ success: false, code: 'incomplete' })
+    expect(res.success === false && res.error).toContain('Run Find fares again')
+    expect(tripRow(tripId).data.status).toBe('results')
+    expect(sent).toEqual([])
+  })
+
   it('after the lock, newcomers are refused (joinTrip trip_locked)', async () => {
     const { tripId, inviteCode } = await ready()
     data(await call(lockTrip, ALICE, { tripId, iata: 'BNA' }))

@@ -128,6 +128,18 @@ describe('buildResultCards', () => {
     expect(card('BNA').priceLevel).toBe('typical')
     expect(card('DEN').missingFor).toEqual(['Bob'])
   })
+
+  it('a card saved as complete is incomplete again when someone joined after the search', () => {
+    const cards = buildResultCards(
+      input({
+        travelers: [...travelers, { userId: 'user_carol', displayName: 'Carol' }],
+      }),
+    )
+    const bna = cards.find((c) => c.iata === 'BNA')!
+    expect(bna.complete).toBe(false)
+    expect(bna.missingFor).toEqual(['Carol'])
+    expect(bna.arrival).toBeNull()
+  })
 })
 
 describe('helpers', () => {
