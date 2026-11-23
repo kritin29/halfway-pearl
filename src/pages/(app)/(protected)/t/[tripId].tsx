@@ -18,6 +18,8 @@ import { BookTab } from '@/components/trip/BookTab'
 import { ResultsTab } from '@/components/trip/ResultsTab'
 import { StatusBadge } from '@/components/trip/StatusBadge'
 import { NextStepGuide } from '@/components/trip/NextStepGuide'
+import { DemoBanner } from '@/components/trip/DemoLabel'
+import { isDemoTrip } from '@/lib/demo'
 import { pageTitle } from '@/brand'
 import { dateRange } from '@/lib/format'
 import type { TripData } from '@/lib/types'
@@ -82,6 +84,8 @@ function Trip({ tripId, onRetry }: { tripId: string; onRetry: () => void }) {
         </p>
         {trip.data.vibe && <p className="text-sm text-muted-foreground">“{trip.data.vibe}”</p>}
       </header>
+
+      {isDemoTrip(trip.data) && <DemoBanner />}
 
       <NextStepGuide trip={trip} me={userId} onGoTo={(t) => setTab(t)} />
 

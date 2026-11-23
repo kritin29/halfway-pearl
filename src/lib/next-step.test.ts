@@ -80,6 +80,14 @@ describe('nextStep: searching, results, locked', () => {
     expect(at({ status: 'results', iVoted: true, isOrganizer: false }).title).toMatch(/Waiting for the organizer/)
   })
 
+  it('demo trips: the lock step doesn’t promise an email', () => {
+    expect(at({ status: 'results', iVoted: true }).body).toMatch(/gets an email/)
+    const demo = at({ status: 'results', iVoted: true, isDemo: true })
+    expect(demo.title).toBe('Lock the destination')
+    expect(demo.body).not.toMatch(/gets an email/)
+    expect(demo.body).toMatch(/Emails are off in demo trips\./)
+  })
+
   it('locked: book, then a done state with the live count', () => {
     expect(at({ status: 'locked' }).title).toBe('Book your flight')
     const mine = at({ status: 'locked', iBooked: true, bookedCount: 1, travelerCount: 3 })

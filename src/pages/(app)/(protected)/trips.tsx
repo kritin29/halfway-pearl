@@ -1,12 +1,13 @@
 /**
- * /trips — the trips I'm on, plus "Start a trip" (SPEC §10).
+ * /trips — the trips I'm on, plus "Start a trip" and "Try a demo trip"
+ * (SPEC §10, §14).
  * The list is a plain `useQuery('trips')`: RBAC (`read: 'collaborator'`)
  * already limits it to trips whose memberIds include me.
  */
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth, useMutations, useQuery } from 'deepspace'
-import { CalendarDays, ChevronRight, UserPlus, Users } from 'lucide-react'
+import { CalendarDays, ChevronRight, FlaskConical, UserPlus, Users } from 'lucide-react'
 import { Badge, Button, Input, Label, Textarea } from '@/components/ui'
 import { ErrorState, LoadingState, Retryable } from '@/components/AsyncState'
 import { useAction } from '@/hooks/useAction'
@@ -17,6 +18,8 @@ import { INPUT_LIMITS } from '@/lib/limits'
 import { parseIdList, type TripData } from '@/lib/types'
 import { text, tripDates } from '@/lib/validate'
 import { StatusBadge } from '@/components/trip/StatusBadge'
+import { DemoLabel } from '@/components/trip/DemoLabel'
+import { DEMO_EMAILS_OFF, isDemoTrip } from '@/lib/demo'
 import { pageTitle } from '@/brand'
 
 export default function TripsPage() {
@@ -29,6 +32,7 @@ export default function TripsPage() {
           Find the best place to meet, with everyone entering their own airports and a private budget.
         </p>
       </header>
+      <DemoTripOffer />
       <CreateTripForm />
       <Retryable>{(retry) => <MyTrips onRetry={retry} />}</Retryable>
     </div>
@@ -68,6 +72,9 @@ function MyTrips({ onRetry }: { onRetry: () => void }) {
             </li>
             <li>Add destinations and find fares. You’ll see voting, locking and booking end to end.</li>
           </ol>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Or press <span className="font-medium text-foreground">Try a demo trip</span> above for a ready-made one.
+          </p>
         </div>
       </section>
     )
@@ -103,12 +110,66 @@ function MyTrips({ onRetry }: { onRetry: () => void }) {
                     {memberCount(trip.data.memberIds)}
                   </span>
                 </div>
+                {isDemoTrip(trip.data) && <DemoLabel className="mt-2" />}
               </div>
               <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
             </Link>
           </li>
         ))}
       </ul>
+    </section>
+  )
+}
+
+/**
+ * "Try a demo trip" (SPEC §14): a ready-made trip with ghost travelers,
+ * destinations and sample fares, for reviewers while live fares are
+ * unavailable. Confirmed write: opens the trip only once the server made it.
+ */
+function DemoTripOffer() {
+  const navigate = useNavigate()
+  const { ready } = useMutations('trips')
+  const demo = useAction<{ tripId: string; searchStarted: boolean }>('createDemoTrip')
+
+  async function start() {
+    const res = await demo.run({})
+    if (res?.success) navigate(`/t/${res.data.tripId}`)
+  }
+
+  return (
+    <section
+      aria-labelledby="demo-trip-heading"
+      data-testid="demo-offer"
+      className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
+    >
+      <div className="min-w-0">
+        <h2 id="demo-trip-heading" className="inline-flex items-center gap-2 text-base font-semibold">
+          <FlaskConical className="h-4 w-4 text-warning" aria-hidden /> Just looking around?
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Open a ready-made trip with two friends in other cities, four destinations and sample prices. You can sort,
+          vote, lock and book it alone. {DEMO_EMAILS_OFF}
+        </p>
+        {demo.error && (
+          <ErrorState
+            testId="demo-error"
+            title="Could not create a demo trip"
+            message={demo.error.message}
+            onRetry={isRetryable(demo.error.code) ? () => void start() : undefined}
+          />
+        )}
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => void start()}
+        loading={demo.pending}
+        disabled={!ready || demo.pending}
+        className="shrink-0"
+        data-testid="try-demo"
+      >
+        {ready ? 'Try a demo trip' : 'Connecting…'}
+      </Button>
     </section>
   )
 }

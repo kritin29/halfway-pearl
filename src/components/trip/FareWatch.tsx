@@ -18,8 +18,10 @@ import { timeAgo } from '@/lib/format'
 import { usd } from '@/lib/results'
 import type { CandidateData, FareSnapshotData, TripData, VoteData } from '@/lib/types'
 import { dateInZone, isWatchPending, isWatchWindowOpen, selectShortlist } from '@/lib/watch'
+import { DEMO_EMAILS_OFF, isDemoTrip } from '@/lib/demo'
 import { FareSparkline, type SparkPoint } from './FareSparkline'
 import { isProviderOutage, ProviderOutage } from './ProviderOutage'
+import { DemoLabel } from './DemoLabel'
 
 /** Most recent points shown in the sparkline. */
 const MAX_POINTS = 30
@@ -49,6 +51,7 @@ function FareWatchContent({ trip, me, onRetry }: { trip: RecordData<TripData>; m
   const ended = !isWatchWindowOpen(trip.data.outboundDate, dateInZone(now))
   const pending = isWatchPending(trip.data.watchQueuedAt, now)
   const on = trip.data.watchEnabled === 1
+  const demo = isDemoTrip(trip.data)
 
   let body
   if (candidates.status === 'loading' || votes.status === 'loading') {
@@ -73,12 +76,15 @@ function FareWatchContent({ trip, me, onRetry }: { trip: RecordData<TripData>; m
 
   const statusLine = ended
     ? 'Watching has stopped: the trip starts within a day.'
-    : on
+    : demo
+      ? `Demo trips aren’t checked every morning. “Check fares now” re-checks the sample prices. ${DEMO_EMAILS_OFF}`
+      : on
       ? 'On: Halfway checks fares every morning and emails the group when the total drops by $50 or 5%.'
       : 'Off: no daily checks or emails.'
 
   return (
     <section className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4 sm:p-5" data-testid="fare-watch" aria-labelledby="fare-watch-heading">
+      {demo && <DemoLabel />}
       <div>
         <h2 id="fare-watch-heading" className="flex items-center gap-2 text-base font-semibold">
           <BellRing className="h-4 w-4" aria-hidden /> Fare watch
@@ -108,7 +114,7 @@ function FareWatchContent({ trip, me, onRetry }: { trip: RecordData<TripData>; m
         )
       )}
 
-      {isOrganizer && <WatchControls trip={trip} ended={ended} pending={pending} statusLine={statusLine} />}
+      {isOrganizer && <WatchControls trip={trip} ended={ended} pending={pending} statusLine={statusLine} demo={demo} />}
     </section>
   )
 }
@@ -183,11 +189,13 @@ function WatchControls({
   ended,
   pending,
   statusLine,
+  demo,
 }: {
   trip: RecordData<TripData>
   ended: boolean
   pending: boolean
   statusLine: string
+  demo: boolean
 }) {
   const toast = useToast()
   const toggle = useAction<{ watchEnabled: number }>('setWatch')
@@ -214,6 +222,11 @@ function WatchControls({
 
   return (
     <div className="flex flex-col gap-4 border-t border-border pt-4">
+      {demo ? (
+        <p className="text-xs text-muted-foreground" data-testid="watch-status">
+          {statusLine}
+        </p>
+      ) : (
       <div className="flex items-start gap-3" data-testid="watch-toggle">
         <Switch
           id="watch-switch"
@@ -232,6 +245,7 @@ function WatchControls({
           </p>
         </div>
       </div>
+      )}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <Button

@@ -14,6 +14,7 @@ import { ArrowRight, Check } from 'lucide-react'
 import { Button, cn } from '@/components/ui'
 import { nextStep, STAGES, type TripTab } from '@/lib/next-step'
 import type { CandidateData, TravelerData, TripData, VoteData } from '@/lib/types'
+import { isDemoTrip } from '@/lib/demo'
 
 function hasAirports(row: RecordData<TravelerData>): boolean {
   return Array.isArray(row.data.homeAirports) && row.data.homeAirports.length > 0
@@ -46,6 +47,7 @@ export function NextStepGuide({
     iBooked: mine?.data.booked === 1,
     bookedCount: travelers.records.filter((r) => r.data.booked === 1).length,
     travelerCount: travelers.records.length,
+    isDemo: isDemoTrip(trip.data),
   })
 
   return (

@@ -14,6 +14,7 @@ import { callAction, isRetryable, type ActionResponse } from '@/lib/actions-clie
 import { dateRange } from '@/lib/format'
 import { LIMITS } from '@/lib/limits'
 import { pageTitle } from '@/brand'
+import { DemoLabel } from '@/components/trip/DemoLabel'
 
 interface InvitePreview {
   name: string
@@ -23,6 +24,8 @@ interface InvitePreview {
   maxTravelers: number
   locked: boolean
   full: boolean
+  /** Demo trip (SPEC §14): sample prices, no emails. */
+  isDemo?: boolean
   alreadyMember: boolean
   tripId: string | null
 }
@@ -111,6 +114,7 @@ function InviteCard({ code, trip }: { code: string; trip: InvitePreview }) {
   return (
     <div className="flex flex-col gap-4">
       <section className="rounded-lg border border-border bg-card p-5" data-testid="invite-card">
+        {trip.isDemo && <DemoLabel className="mb-3" />}
         <p className="text-sm text-muted-foreground">You’re invited to</p>
         <h2 className="mt-1 text-xl font-semibold" data-testid="invite-trip-name">
           {trip.name}

@@ -6,6 +6,7 @@
  *
  * Stages: add airports → add destinations → find fares → vote → lock → book.
  */
+import { DEMO_EMAILS_OFF } from './demo'
 import type { TripStatus } from './types'
 
 export const STAGES = [
@@ -35,6 +36,8 @@ export interface NextStepInput {
   /** Locked trips: travelers ticked booked / all travelers. */
   bookedCount: number
   travelerCount: number
+  /** Demo trip (src/lib/demo.ts): no emails, so the lock copy doesn't promise one. */
+  isDemo?: boolean
 }
 
 export interface NextStep {
@@ -95,7 +98,9 @@ export function nextStep(t: NextStepInput): NextStep {
     if (t.isOrganizer) {
       return step('lock', {
         title: 'Lock the destination',
-        body: 'When the group agrees, lock it. Everyone gets an email with their own booking link.',
+        body: t.isDemo
+          ? `When the group agrees, lock it. Everyone’s booking link is on the Book tab. ${DEMO_EMAILS_OFF}`
+          : 'When the group agrees, lock it. Everyone gets an email with their own booking link.',
         action: { label: 'Go to Results', tab: 'results' },
       })
     }

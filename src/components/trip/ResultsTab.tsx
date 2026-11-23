@@ -25,7 +25,9 @@ import {
   type ResultPerson,
 } from '@/lib/results'
 import type { BudgetData, CandidateData, TravelerData, TripData } from '@/lib/types'
+import { DEMO_EMAILS_OFF, isDemoTrip } from '@/lib/demo'
 import { emailReportText } from './BookTab'
+import { DemoLabel } from './DemoLabel'
 import { SearchStatus } from './SearchStatus'
 
 interface FareData {
@@ -123,6 +125,7 @@ function ResultsContent({
   const locked = trip.data.status === 'locked'
   // Lockable: organizer, results are in, and everyone has a fare there.
   const canLock = isOrganizer && trip.data.status === 'results'
+  const demo = isDemoTrip(trip.data)
 
   async function confirmLock() {
     if (!locking) return
@@ -180,6 +183,7 @@ function ResultsContent({
                 locked={locked}
                 lockedHere={locked && trip.data.lockedIata === card.iata}
                 searching={searching}
+                demo={demo}
                 onLock={canLock && card.checked && card.complete ? () => setLocking(card) : null}
               />
             ))}
@@ -193,8 +197,12 @@ function ResultsContent({
         loading={lock.pending}
         variant="default"
         title={`Lock ${locking ? `${locking.city} (${locking.iata})` : 'this destination'}?`}
-        description="Everyone on the app gets an email with their own booking link, voting closes, and nobody new can join. This can’t be undone."
-        confirmText="Lock and email everyone"
+        description={
+          demo
+            ? `Voting closes, nobody new can join, and everyone’s booking link moves to the Book tab. ${DEMO_EMAILS_OFF} This can’t be undone.`
+            : 'Everyone on the app gets an email with their own booking link, voting closes, and nobody new can join. This can’t be undone.'
+        }
+        confirmText={demo ? 'Lock destination' : 'Lock and email everyone'}
       />
     </div>
   )
@@ -213,6 +221,7 @@ function ResultCard({
   locked,
   lockedHere,
   searching,
+  demo,
   onLock,
 }: {
   card: Card
@@ -221,6 +230,7 @@ function ResultCard({
   locked: boolean
   lockedHere: boolean
   searching: boolean
+  demo: boolean
   onLock: (() => void) | null
 }) {
   const level = card.priceLevel === 'unknown' ? null : LEVEL_BADGE[card.priceLevel]
@@ -234,6 +244,7 @@ function ResultCard({
       data-maxfare={card.maxFare ?? ''}
       data-spread={card.arrivalSpreadMin ?? ''}
     >
+      {demo && <DemoLabel />}
       <div className="flex items-start gap-3">
         <div className="flex h-10 w-12 shrink-0 items-center justify-center rounded-md bg-secondary font-mono text-sm font-semibold">
           {card.iata}

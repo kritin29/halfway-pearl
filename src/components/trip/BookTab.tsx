@@ -20,15 +20,27 @@ import { dateRange } from '@/lib/format'
 import { formatDuration } from '@/lib/ranking'
 import { clockTime, safeBookingUrl, stopsLabel, usd, type FareRow } from '@/lib/results'
 import { isGhostId, type CandidateData, type TravelerData, type TripData } from '@/lib/types'
+import { DEMO_EMAILS_OFF, isDemoTrip } from '@/lib/demo'
+import { DemoLabel } from './DemoLabel'
 import { FareWatch } from './FareWatch'
 
 interface LockReport {
-  emails: { sent: number; alreadySent: number; noEmail: number; capped: number; failed: number; mocked: boolean } | null
+  emails: {
+    sent: number
+    alreadySent: number
+    noEmail: number
+    capped: number
+    failed: number
+    mocked: boolean
+    /** Demo trip: nothing was sent (SPEC §14). Absent in older responses. */
+    emailsOff?: boolean
+  } | null
 }
 
 /** One sentence for the organizer after a lock or a resend. */
 export function emailReportText(emails: LockReport['emails']): string {
   if (!emails) return 'The booking emails couldn’t be sent. Try “Email booking links again” in a minute.'
+  if (emails.emailsOff) return `${DEMO_EMAILS_OFF} Everyone’s booking link is on the Book tab.`
   const parts: string[] = []
   if (emails.sent > 0) parts.push(`Booking emails sent to ${emails.sent} ${emails.sent === 1 ? 'traveler' : 'travelers'}.`)
   else if (emails.alreadySent > 0 && emails.failed + emails.capped + emails.noEmail === 0) parts.push('Everyone already has their booking email.')
@@ -71,10 +83,12 @@ function BookContent({ trip, me, onRetry }: { trip: RecordData<TripData>; me: st
   const mine = rows.find((r) => r.data.userId === me)
   const myFare = fares.records.find((f) => f.data.travelerId === me)?.data ?? null
   const isOrganizer = trip.data.organizerId === me
+  const demo = isDemoTrip(trip.data)
 
   return (
     <div className="flex flex-col gap-4" data-testid="book">
       <section className="rounded-lg border border-border bg-card p-4 sm:p-5" data-testid="locked-destination" data-iata={iata}>
+        {demo && <DemoLabel className="mb-3" />}
         <p className="text-sm text-muted-foreground">You’re all going to</p>
         <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
           <h2 className="text-2xl font-semibold tracking-tight">{city}</h2>
@@ -92,14 +106,15 @@ function BookContent({ trip, me, onRetry }: { trip: RecordData<TripData>; me: st
           homeAirports={Array.isArray(mine.data.homeAirports) ? mine.data.homeAirports : []}
           outboundDate={trip.data.outboundDate}
           returnDate={trip.data.returnDate}
+          demo={demo}
         />
       )}
 
-      <Checklist tripId={tripId} rows={rows} me={me} isOrganizer={isOrganizer} />
+      <Checklist tripId={tripId} rows={rows} me={me} isOrganizer={isOrganizer} demo={demo} />
 
       <FareWatch trip={trip} me={me} />
 
-      {isOrganizer && <OrganizerTools trip={trip} iata={iata} />}
+      {isOrganizer && <OrganizerTools trip={trip} iata={iata} demo={demo} />}
     </div>
   )
 }
@@ -111,6 +126,7 @@ function YourFlight({
   homeAirports,
   outboundDate,
   returnDate,
+  demo,
 }: {
   fare: FareRow | null
   iata: string
@@ -118,6 +134,7 @@ function YourFlight({
   homeAirports: string[]
   outboundDate: string
   returnDate: string
+  demo: boolean
 }) {
   const home = fare?.status === 'ok' && fare.price === 0 && fare.originIata === iata
   const hasFare = fare?.status === 'ok' && typeof fare.price === 'number' && fare.price > 0
@@ -134,6 +151,7 @@ function YourFlight({
 
   return (
     <section className="rounded-lg border border-border bg-card p-4 sm:p-5" data-testid="your-flight">
+      {demo && <DemoLabel className="mb-3" />}
       <h2 className="flex items-center gap-2 text-base font-semibold">
         <PlaneTakeoff className="h-4 w-4" aria-hidden /> Your flight
       </h2>
@@ -182,15 +200,18 @@ function Checklist({
   rows,
   me,
   isOrganizer,
+  demo,
 }: {
   tripId: string
   rows: RecordData<TravelerData>[]
   me: string
   isOrganizer: boolean
+  demo: boolean
 }) {
   const booked = rows.filter((r) => r.data.booked === 1).length
   return (
     <section className="rounded-lg border border-border bg-card p-4 sm:p-5" aria-labelledby="checklist-heading">
+      {demo && <DemoLabel className="mb-3" />}
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="checklist-heading" className="text-base font-semibold">
           Who’s booked
@@ -321,9 +342,20 @@ function ChecklistRow({
   )
 }
 
-function OrganizerTools({ trip, iata }: { trip: RecordData<TripData>; iata: string }) {
+function OrganizerTools({ trip, iata, demo }: { trip: RecordData<TripData>; iata: string; demo: boolean }) {
   const toast = useToast()
   const resend = useAction<LockReport>('lockTrip')
+
+  if (demo) {
+    return (
+      <section className="rounded-lg border border-border bg-card p-4 sm:p-5" aria-label="Organizer tools" data-testid="demo-emails-off">
+        <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+          <Mail className="h-4 w-4 shrink-0" aria-hidden />
+          {DEMO_EMAILS_OFF} In a real trip, everyone gets their own booking link by email when you lock.
+        </p>
+      </section>
+    )
+  }
 
   async function resendEmails() {
     const res = await resend.run({ tripId: trip.recordId, iata })
