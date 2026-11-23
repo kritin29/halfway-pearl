@@ -55,8 +55,15 @@ export function NextStepGuide({
       aria-labelledby="next-step-heading"
       data-testid="next-step"
       data-stage={step.stage}
-      className="rounded-lg border border-border bg-card p-4 sm:p-5"
+      className={cn(
+        'surface relative overflow-hidden p-4 sm:p-5',
+        step.done ? 'border-success/40 bg-gradient-to-br from-success/10 to-card' : 'border-primary/30',
+      )}
     >
+      <span
+        aria-hidden
+        className={cn('absolute inset-y-0 left-0 w-1', step.done ? 'bg-success' : 'bg-gradient-to-b from-primary to-coral')}
+      />
       <ol className="flex items-center" aria-label={`Step ${step.index + 1} of ${STAGES.length}: ${STAGES[step.index].label}`}>
         {STAGES.map((s, i) => {
           const past = i < step.index || (i === step.index && step.done)
@@ -66,18 +73,22 @@ export function NextStepGuide({
               <span className="flex flex-col items-center gap-1">
                 <span
                   className={cn(
-                    'flex h-5 w-5 items-center justify-center rounded-full border-2',
-                    past && 'border-foreground bg-foreground text-background',
-                    current && 'border-primary bg-primary',
-                    !past && !current && 'border-border bg-card',
+                    'flex h-6 w-6 items-center justify-center rounded-full border-2 text-[11px] font-bold transition-colors',
+                    past && 'border-success bg-success text-success-foreground',
+                    current && 'pulse-ring border-primary bg-primary text-primary-foreground',
+                    !past && !current && 'border-border bg-card text-muted-foreground',
                   )}
                 >
-                  {past && <Check className="h-3 w-3" strokeWidth={3} />}
+                  {past ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : i + 1}
                 </span>
                 <span
                   className={cn(
                     'hidden text-[11px] sm:block',
-                    current ? 'font-semibold text-foreground' : 'text-muted-foreground',
+                    current
+                      ? 'font-semibold text-accent-foreground'
+                      : past
+                        ? 'font-medium text-success-ink'
+                        : 'text-muted-foreground',
                   )}
                 >
                   {s.label}
@@ -87,7 +98,7 @@ export function NextStepGuide({
                 <span
                   className={cn(
                     'mx-1 h-0 flex-1 border-t-2 sm:mb-5',
-                    i < step.index ? 'border-foreground' : 'border-dashed border-border',
+                    i < step.index || (i === step.index && step.done) ? 'border-success' : 'border-dashed border-border',
                   )}
                 />
               )}
@@ -98,10 +109,15 @@ export function NextStepGuide({
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <p className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+          <p
+            className={cn(
+              'font-mono text-[11px] font-medium uppercase tracking-wider',
+              step.done ? 'text-success-ink' : 'text-accent-foreground',
+            )}
+          >
             {step.done ? 'All set' : `Next · step ${step.index + 1} of ${STAGES.length}`}
           </p>
-          <h2 id="next-step-heading" className="mt-0.5 text-base font-semibold" data-testid="next-step-title">
+          <h2 id="next-step-heading" className="mt-0.5 font-display text-lg font-bold" data-testid="next-step-title">
             {step.title}
           </h2>
           <p className="mt-0.5 text-sm text-muted-foreground">{step.body}</p>
@@ -109,11 +125,11 @@ export function NextStepGuide({
         {step.action && (
           <Button
             variant={step.done ? 'outline' : 'default'}
-            size="sm"
-            className="w-fit shrink-0"
+            className="group w-full shrink-0 sm:w-fit"
             onClick={() => onGoTo(step.action!.tab)}
           >
-            {step.action.label} <ArrowRight aria-hidden />
+            {step.action.label}{' '}
+            <ArrowRight aria-hidden className="transition-transform motion-safe:group-hover:translate-x-0.5" />
           </Button>
         )}
       </div>

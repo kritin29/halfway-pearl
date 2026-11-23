@@ -7,15 +7,15 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth, useMutations, useQuery } from 'deepspace'
-import { CalendarDays, ChevronRight, FlaskConical, UserPlus, Users } from 'lucide-react'
-import { Badge, Button, Input, Label, Textarea } from '@/components/ui'
+import { CalendarDays, ChevronRight, FlaskConical, PlaneTakeoff, UserPlus, Users } from 'lucide-react'
+import { Badge, Button, Input, Label, Textarea, cn } from '@/components/ui'
 import { ErrorState, LoadingState, Retryable } from '@/components/AsyncState'
 import { useAction } from '@/hooks/useAction'
 import { isRetryable } from '@/lib/actions-client'
 import { usageDay } from '@/lib/caps'
 import { dateRange, localToday } from '@/lib/format'
 import { INPUT_LIMITS } from '@/lib/limits'
-import { parseIdList, type TripData } from '@/lib/types'
+import { parseIdList, type TripData, type TripStatus } from '@/lib/types'
 import { text, tripDates } from '@/lib/validate'
 import { StatusBadge } from '@/components/trip/StatusBadge'
 import { DemoLabel } from '@/components/trip/DemoLabel'
@@ -27,7 +27,9 @@ export default function TripsPage() {
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-6 sm:px-6">
       <title>{pageTitle('Your trips')}</title>
       <header>
-        <h1 className="font-display text-3xl font-semibold tracking-tight">Your trips</h1>
+        <h1 className="font-display text-4xl font-bold tracking-tight">
+          Your <span className="bg-gradient-to-r from-primary to-coral-ink bg-clip-text text-transparent">trips</span>
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Find the best place to meet, with everyone entering their own airports and a private budget.
         </p>
@@ -52,7 +54,7 @@ function MyTrips({ onRetry }: { onRetry: () => void }) {
       <section
         aria-labelledby="no-trips-heading"
         data-testid="trips-empty"
-        className="rounded-lg border border-dashed border-border px-4 py-8 sm:px-8"
+        className="rounded-2xl border-2 border-dashed border-primary/30 bg-card/60 px-4 py-8 sm:px-8"
       >
         <h2 id="no-trips-heading" className="text-base font-semibold">
           No trips yet
@@ -60,7 +62,7 @@ function MyTrips({ onRetry }: { onRetry: () => void }) {
         <p className="mt-1 text-sm text-muted-foreground">
           Start one above, or open an invite link a friend sent you.
         </p>
-        <div className="mt-5 rounded-lg bg-muted p-4" data-testid="try-solo">
+        <div className="mt-5 rounded-xl bg-accent/60 p-4" data-testid="try-solo">
           <p className="inline-flex items-center gap-2 text-sm font-semibold">
             <UserPlus className="h-4 w-4" aria-hidden /> Try it solo
           </p>
@@ -83,7 +85,7 @@ function MyTrips({ onRetry }: { onRetry: () => void }) {
   const sorted = [...records].sort((a, b) => a.data.outboundDate.localeCompare(b.data.outboundDate))
   return (
     <section aria-labelledby="my-trips-heading">
-      <h2 id="my-trips-heading" className="mb-3 text-lg font-semibold">
+      <h2 id="my-trips-heading" className="mb-3 font-display text-xl font-bold">
         Trips you're on
       </h2>
       <ul className="flex flex-col gap-3" data-testid="trip-list">
@@ -92,13 +94,20 @@ function MyTrips({ onRetry }: { onRetry: () => void }) {
             <Link
               to={`/t/${trip.recordId}`}
               data-testid="trip-card"
-              className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-accent"
+              className="surface surface-interactive group relative flex items-center gap-4 overflow-hidden p-4 pl-5"
             >
+              <span aria-hidden className={cn('absolute inset-y-0 left-0 w-1.5', STATUS_STRIPE[trip.data.status])} />
+              <span
+                aria-hidden
+                className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground sm:flex"
+              >
+                <PlaneTakeoff className="h-5 w-5" />
+              </span>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="truncate font-medium text-foreground">{trip.data.name}</span>
+                  <span className="truncate font-display text-lg font-bold text-foreground">{trip.data.name}</span>
                   <StatusBadge status={trip.data.status} />
-                  {trip.data.organizerId === userId && <Badge variant="outline">Organizer</Badge>}
+                  {trip.data.organizerId === userId && <Badge variant="primary">Organizer</Badge>}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                   <span className="inline-flex items-center gap-1">
@@ -112,7 +121,10 @@ function MyTrips({ onRetry }: { onRetry: () => void }) {
                 </div>
                 {isDemoTrip(trip.data) && <DemoLabel className="mt-2" />}
               </div>
-              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              <ChevronRight
+                className="h-5 w-5 shrink-0 text-muted-foreground transition-[transform,color] group-hover:text-primary motion-safe:group-hover:translate-x-1"
+                aria-hidden
+              />
             </Link>
           </li>
         ))}
@@ -140,28 +152,33 @@ function DemoTripOffer() {
     <section
       aria-labelledby="demo-trip-heading"
       data-testid="demo-offer"
-      className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
+      className="flex flex-col gap-3 rounded-2xl border border-sun bg-gradient-to-br from-sun-soft via-card to-accent p-4 shadow-[0_10px_30px_-18px_rgba(168,90,0,0.55)] sm:flex-row sm:items-center sm:justify-between sm:p-5"
     >
-      <div className="min-w-0">
-        <h2 id="demo-trip-heading" className="inline-flex items-center gap-2 text-base font-semibold">
-          <FlaskConical className="h-4 w-4 text-warning" aria-hidden /> Just looking around?
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Open a ready-made trip with two friends in other cities, four destinations and sample prices. You can sort,
-          vote, lock and book it alone. {DEMO_EMAILS_OFF}
-        </p>
-        {demo.error && (
-          <ErrorState
-            testId="demo-error"
-            title="Could not create a demo trip"
-            message={demo.error.message}
-            onRetry={isRetryable(demo.error.code) ? () => void start() : undefined}
-          />
-        )}
+      <div className="flex min-w-0 gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sun text-sun-foreground">
+          <FlaskConical className="h-5 w-5" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <h2 id="demo-trip-heading" className="font-display text-lg font-bold">
+            Just looking around?
+          </h2>
+          <p className="mt-1 text-sm text-foreground/80">
+            Open a ready-made trip with two friends in other cities, four destinations and sample prices. You can sort,
+            vote, lock and book it alone. {DEMO_EMAILS_OFF}
+          </p>
+          {demo.error && (
+            <ErrorState
+              testId="demo-error"
+              title="Could not create a demo trip"
+              message={demo.error.message}
+              onRetry={isRetryable(demo.error.code) ? () => void start() : undefined}
+            />
+          )}
+        </div>
       </div>
       <Button
         type="button"
-        variant="outline"
+        variant="ink"
         onClick={() => void start()}
         loading={demo.pending}
         disabled={!ready || demo.pending}
@@ -203,8 +220,11 @@ function CreateTripForm() {
 
   const error = formError ?? create.error?.message ?? null
   return (
-    <section aria-labelledby="create-trip-heading" className="rounded-lg border border-border bg-card p-4 sm:p-6">
-      <h2 id="create-trip-heading" className="text-lg font-semibold">
+    <section aria-labelledby="create-trip-heading" className="surface p-4 sm:p-6">
+      <h2 id="create-trip-heading" className="flex items-center gap-2 font-display text-xl font-bold">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <PlaneTakeoff className="h-4 w-4" aria-hidden />
+        </span>
         Start a trip
       </h2>
       <form className="mt-4 flex flex-col gap-4" onSubmit={submit} noValidate data-testid="create-trip-form">
@@ -261,12 +281,20 @@ function CreateTripForm() {
             onRetry={create.error && isRetryable(create.error.code) ? () => void submit() : undefined}
           />
         )}
-        <Button type="submit" loading={create.pending} disabled={!ready || create.pending} className="sm:w-fit">
+        <Button type="submit" size="lg" loading={create.pending} disabled={!ready || create.pending} className="sm:w-fit">
           {ready ? 'Create trip' : 'Connecting…'}
         </Button>
       </form>
     </section>
   )
+}
+
+/** The colored edge on each trip card, same hue as its status badge. */
+const STATUS_STRIPE: Record<TripStatus, string> = {
+  gathering: 'bg-info',
+  searching: 'bg-primary',
+  results: 'bg-coral',
+  locked: 'bg-success',
 }
 
 function memberCount(raw: unknown): string {

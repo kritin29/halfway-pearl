@@ -3,7 +3,7 @@
  * clients never use `useJobs`; the job copies progress onto the trip).
  */
 import type { RecordData } from 'deepspace'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Plane } from 'lucide-react'
 import { isProviderOutage, ProviderOutage } from './ProviderOutage'
 import type { TripData } from '@/lib/types'
 
@@ -13,10 +13,13 @@ export function SearchStatus({ trip }: { trip: RecordData<TripData> }) {
   if (status === 'searching') {
     const pct = Math.round(Math.min(1, Math.max(0, searchProgress ?? 0)) * 100)
     return (
-      <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4" data-testid="search-progress">
+      <div className="surface flex flex-col gap-2 border-primary/30 p-4" data-testid="search-progress">
         <div className="flex items-baseline justify-between gap-3 text-sm">
-          <span className="font-medium">Checking fares…</span>
-          <span className="tabular-nums text-muted-foreground">{pct}%</span>
+          <span className="inline-flex items-center gap-2 font-semibold">
+            <Plane className="h-4 w-4 text-primary motion-safe:animate-pulse" aria-hidden />
+            Checking fares…
+          </span>
+          <span className="font-mono font-semibold tabular-nums text-accent-foreground">{pct}%</span>
         </div>
         <div
           role="progressbar"
@@ -24,9 +27,12 @@ export function SearchStatus({ trip }: { trip: RecordData<TripData> }) {
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={pct}
-          className="h-2 overflow-hidden rounded-full bg-secondary"
+          className="h-2.5 overflow-hidden rounded-full bg-muted"
         >
-          <div className="h-full rounded-full bg-primary transition-[width] duration-500" style={{ width: `${pct}%` }} />
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-primary to-coral transition-[width] duration-500"
+            style={{ width: `${pct}%` }}
+          />
         </div>
         <p className="min-h-5 text-sm text-muted-foreground" aria-live="polite" data-testid="search-message">
           {searchMessage ?? 'Starting…'}

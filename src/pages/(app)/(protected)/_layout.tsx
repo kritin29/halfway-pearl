@@ -33,7 +33,7 @@ function SignedOutPanel() {
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-6 py-20">
       <title>{pageTitle('Sign in')}</title>
-      <div className="w-full max-w-sm rounded-lg border border-border bg-card p-8 text-center">
+      <div className="w-full max-w-sm surface p-8 text-center">
         <h1 className="font-display text-2xl font-semibold text-foreground">Sign in to plan together</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Your trips, invites and fares are only visible to the people on each trip.

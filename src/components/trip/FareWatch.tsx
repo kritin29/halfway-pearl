@@ -83,7 +83,7 @@ function FareWatchContent({ trip, me, onRetry }: { trip: RecordData<TripData>; m
       : 'Off: no daily checks or emails.'
 
   return (
-    <section className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4 sm:p-5" data-testid="fare-watch" aria-labelledby="fare-watch-heading">
+    <section className="flex flex-col gap-4 surface p-4 sm:p-5" data-testid="fare-watch" aria-labelledby="fare-watch-heading">
       {demo && <DemoLabel />}
       <div>
         <h2 id="fare-watch-heading" className="flex items-center gap-2 text-base font-semibold">

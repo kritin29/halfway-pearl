@@ -16,7 +16,7 @@
  */
 
 import { Suspense, type ReactNode } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { DeepSpaceAuthProvider, useAuthStatus } from 'deepspace'
 import { RecordProvider, RecordScope, AgentTools } from 'deepspace'
 import Navigation from '../../components/Navigation'
@@ -43,12 +43,28 @@ export default function AppLayout() {
                 </div>
               }
             >
-              <Outlet />
+              <PageTransition>
+                <Outlet />
+              </PageTransition>
             </Suspense>
           </main>
         </div>
       </AuthBoot>
     </DeepSpaceAuthProvider>
+  )
+}
+
+/**
+ * Each route fades and rises in as you move between pages (styles.css
+ * `.enter-page`; skipped for reduced motion). Keyed on the path, so tab
+ * switches inside a trip don't replay it.
+ */
+function PageTransition({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation()
+  return (
+    <div key={pathname} className="enter-page">
+      {children}
+    </div>
   )
 }
 

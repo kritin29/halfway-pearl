@@ -55,8 +55,10 @@ export default function Navigation() {
         to={item.path}
         aria-current={active ? 'page' : undefined}
         className={cn(
-          'rounded-md px-3 py-1.5 text-sm font-medium',
-          active ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground',
+          'relative rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors duration-150',
+          active
+            ? 'bg-white/12 text-nav-foreground after:absolute after:inset-x-3 after:-bottom-[11px] after:h-0.5 after:rounded-full after:bg-coral'
+            : 'text-nav-muted hover:bg-white/8 hover:text-nav-foreground',
         )}
       >
         {item.label}
@@ -66,14 +68,22 @@ export default function Navigation() {
 
   return (
     <>
-      <nav data-testid="app-navigation" aria-label="Main" className="border-b border-border bg-background">
+      <nav data-testid="app-navigation" aria-label="Main" className="bg-nav text-nav-foreground shadow-[0_1px_0_rgba(255,255,255,0.06),0_8px_24px_-12px_rgba(26,22,54,0.5)]">
         <div className="mx-auto flex h-14 max-w-5xl items-center gap-2 px-4 sm:gap-4 sm:px-6">
-          <Link to="/trips" className="mr-1 inline-flex items-center gap-2 text-foreground" aria-label={`${BRAND}, your trips`}>
-            <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden>
-              <path d="M2 20 Q7 9 12 11" className="fill-none stroke-foreground" strokeWidth={1.6} strokeDasharray="2 2" />
-              <path d="M22 20 Q17 9 12 11" className="fill-none stroke-foreground" strokeWidth={1.6} strokeDasharray="2 2" />
-              <circle cx={12} cy={9} r={4} className="fill-primary" />
-              <circle cx={12} cy={9} r={1.4} className="fill-background" />
+          <Link
+            to="/trips"
+            className="group mr-1 inline-flex items-center gap-2 rounded-lg text-nav-foreground"
+            aria-label={`${BRAND}, your trips`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-6 w-6 transition-transform duration-200 motion-safe:group-hover:-translate-y-0.5"
+              aria-hidden
+            >
+              <path d="M2 20 Q7 9 12 11" className="fill-none stroke-nav-muted" strokeWidth={1.6} strokeDasharray="2 2" />
+              <path d="M22 20 Q17 9 12 11" className="fill-none stroke-nav-muted" strokeWidth={1.6} strokeDasharray="2 2" />
+              <circle cx={12} cy={9} r={4} className="fill-coral" />
+              <circle cx={12} cy={9} r={1.4} className="fill-nav" />
             </svg>
             <span className="font-display text-lg font-semibold tracking-tight">{BRAND}</span>
           </Link>
@@ -85,9 +95,9 @@ export default function Navigation() {
           {!isLoaded ? null : isSignedIn && !profileReady ? (
             /* Signed in, profile still loading — skeleton pill, never the
                Sign in button (that would offer sign-in to a signed-in user). */
-            <div className="flex items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-2.5">
-              <div className="h-6 w-6 animate-pulse rounded-full bg-muted" />
-              <div className="hidden h-4 w-20 animate-pulse rounded-md bg-muted sm:block" />
+            <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/8 py-1 pl-1 pr-2.5">
+              <div className="h-6 w-6 animate-pulse rounded-full bg-white/20" />
+              <div className="hidden h-4 w-20 animate-pulse rounded-md bg-white/20 sm:block" />
             </div>
           ) : isSignedIn && user ? (
             <DropdownMenu>
@@ -95,22 +105,22 @@ export default function Navigation() {
                 render={
                   <button
                     aria-label="Account menu"
-                    className="group flex items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-2.5 text-sm transition-colors hover:bg-accent"
+                    className="group flex cursor-pointer items-center gap-2 rounded-full border border-white/15 bg-white/8 py-1 pl-1 pr-2.5 text-sm transition-colors hover:border-white/30 hover:bg-white/15 data-[popup-open]:bg-white/15"
                   >
-                    <Avatar className="h-6 w-6 ring-1 ring-inset ring-border">
+                    <Avatar className="h-6 w-6 ring-2 ring-coral">
                       <AvatarImage src={user.imageUrl ?? undefined} referrerPolicy="no-referrer" />
-                      <AvatarFallback className="text-[11px]">
+                      <AvatarFallback className="bg-coral text-[11px] font-semibold text-nav">
                         {(user.name?.[0] ?? user.email?.[0] ?? '?').toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <span
                       data-testid="nav-user-name"
-                      className="hidden max-w-[140px] truncate text-foreground sm:inline"
+                      className="hidden max-w-[140px] truncate font-medium text-nav-foreground sm:inline"
                     >
                       {user.name || user.email}
                     </span>
                     <ChevronDown
-                      className="h-3.5 w-3.5 text-muted-foreground transition-transform duration-150 group-data-[popup-open]:rotate-180"
+                      className="h-3.5 w-3.5 text-nav-muted transition-transform duration-150 group-data-[popup-open]:rotate-180"
                       aria-hidden
                     />
                   </button>
@@ -139,7 +149,7 @@ export default function Navigation() {
             <button
               data-testid="nav-sign-in-button"
               onClick={() => setShowAuthModal(true)}
-              className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              className="cursor-pointer rounded-lg bg-coral px-3.5 py-1.5 text-sm font-semibold text-nav transition-colors hover:bg-sun"
             >
               Sign in
             </button>

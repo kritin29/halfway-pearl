@@ -6,7 +6,7 @@
  */
 import { useState } from 'react'
 import { useMutations, useQuery, type RecordData } from 'deepspace'
-import { Check, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Ghost, Pencil, Plane, Plus, Trash2, Wallet } from 'lucide-react'
 import { Badge, Button, ConfirmModal, useToast } from '@/components/ui'
 import { EmptyNote, ErrorState, LoadingState, Retryable } from '@/components/AsyncState'
 import { useAction } from '@/hooks/useAction'
@@ -15,6 +15,7 @@ import { LIMITS } from '@/lib/limits'
 import type { TravelerData, TripData } from '@/lib/types'
 import { GhostDialog } from './GhostDialog'
 import { InviteLink } from './InviteLink'
+import { PersonAvatar } from './PersonAvatar'
 import { PrivateBudget } from './PrivateBudget'
 import { YourSettings } from './YourSettings'
 
@@ -87,7 +88,7 @@ function CrewList({
   }
 
   return (
-    <section aria-labelledby="crew-heading" className="rounded-lg border border-border bg-card p-4 sm:p-5">
+    <section aria-labelledby="crew-heading" className="surface p-4 sm:p-5">
       <div className="flex items-center justify-between gap-3">
         <h2 id="crew-heading" className="text-base font-semibold">
           Crew{' '}
@@ -120,19 +121,21 @@ function CrewList({
                 key={t.recordId}
                 data-testid="crew-member"
                 data-me={isMe ? 'true' : undefined}
-                className="flex items-start gap-3 py-3"
+                className="-mx-2 flex items-start gap-3 rounded-lg px-2 py-3 transition-colors hover:bg-accent/40"
               >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-sm font-medium">
-                  {(t.data.displayName?.[0] ?? '?').toUpperCase()}
-                </div>
+                <PersonAvatar id={t.data.userId} name={t.data.displayName} />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-medium">{t.data.displayName}</span>
+                    <span className="font-semibold">{t.data.displayName}</span>
                     {isMe && <span className="text-sm text-muted-foreground">(you)</span>}
-                    {t.data.userId === trip.data.organizerId && <Badge variant="outline">Organizer</Badge>}
+                    {t.data.userId === trip.data.organizerId && (
+                      <Badge variant="primary" size="sm">
+                        Organizer
+                      </Badge>
+                    )}
                     {t.data.isGhost === 1 && (
-                      <Badge variant="secondary" title="Added by the organizer; doesn’t use the app">
-                        Ghost
+                      <Badge variant="secondary" size="sm" title="Added by the organizer; doesn’t use the app">
+                        <Ghost aria-hidden /> Ghost
                       </Badge>
                     )}
                   </div>
@@ -142,14 +145,19 @@ function CrewList({
                       : 'No home airports yet'}
                   </p>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {airports.length > 0 && (
+                    {airports.length > 0 ? (
                       <Badge variant="success" size="sm">
-                        <Check className="mr-0.5 inline h-3 w-3" aria-hidden />
+                        <Plane aria-hidden />
                         airports set
+                      </Badge>
+                    ) : (
+                      <Badge variant="warning" size="sm">
+                        needs airports
                       </Badge>
                     )}
                     {t.data.isGhost !== 1 && t.data.hasBudget === 1 && (
                       <Badge variant="info" size="sm">
+                        <Wallet aria-hidden />
                         budget set ✓
                       </Badge>
                     )}
@@ -170,6 +178,7 @@ function CrewList({
                       size="icon"
                       variant="ghost"
                       disabled={!ready}
+                      className="hover:bg-destructive/10 hover:text-destructive"
                       aria-label={`Remove ${t.data.displayName}`}
                       onClick={() => setRemoving(t)}
                     >

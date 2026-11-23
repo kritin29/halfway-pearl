@@ -9,7 +9,19 @@
  */
 import { useState, type ReactNode } from 'react'
 import { useMutations, useQuery, type RecordData } from 'deepspace'
-import { ExternalLink, Home, Lock, LockKeyhole, ThumbsUp } from 'lucide-react'
+import {
+  Check,
+  Clock,
+  ExternalLink,
+  Home,
+  Lock,
+  LockKeyhole,
+  PiggyBank,
+  Scale,
+  ThumbsUp,
+  Users,
+  type LucideIcon,
+} from 'lucide-react'
 import { Badge, Button, ConfirmModal, Tabs, TabsList, TabsTrigger, cn, useToast } from '@/components/ui'
 import { EmptyNote, ErrorState, LoadingState, Retryable } from '@/components/AsyncState'
 import { useAction } from '@/hooks/useAction'
@@ -28,6 +40,7 @@ import type { BudgetData, CandidateData, TravelerData, TripData } from '@/lib/ty
 import { DEMO_EMAILS_OFF, isDemoTrip } from '@/lib/demo'
 import { emailReportText } from './BookTab'
 import { DemoLabel } from './DemoLabel'
+import { PersonAvatar } from './PersonAvatar'
 import { SearchStatus } from './SearchStatus'
 
 interface FareData {
@@ -49,10 +62,15 @@ interface VoteData {
   candidateIata: string
 }
 
-const MODES: Array<{ value: SortMode; label: string; hint: string }> = [
-  { value: 'cheapest', label: 'Cheapest', hint: 'Lowest group total first.' },
-  { value: 'fairest', label: 'Fairest', hint: 'Lowest highest fare first, so nobody pays far more than the rest.' },
-  { value: 'together', label: 'Together', hint: 'Smallest gap between the first and last arrival first.' },
+const MODES: Array<{ value: SortMode; label: string; hint: string; Icon: LucideIcon }> = [
+  { value: 'cheapest', label: 'Cheapest', hint: 'Lowest group total first.', Icon: PiggyBank },
+  {
+    value: 'fairest',
+    label: 'Fairest',
+    hint: 'Lowest highest fare first, so nobody pays far more than the rest.',
+    Icon: Scale,
+  },
+  { value: 'together', label: 'Together', hint: 'Smallest gap between the first and last arrival first.', Icon: Users },
 ]
 
 export function ResultsTab({
@@ -163,16 +181,21 @@ function ResultsContent({
         )
       ) : (
         <>
-          <Tabs value={mode} onValueChange={(v) => setMode(v as SortMode)}>
-            <TabsList className="w-full sm:w-fit" aria-label="Sort destinations">
-              {MODES.map((m) => (
-                <TabsTrigger key={m.value} value={m.value}>
-                  {m.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-          <p className="text-sm text-muted-foreground">{MODES.find((m) => m.value === mode)?.hint}</p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+            <Tabs value={mode} onValueChange={(v) => setMode(v as SortMode)}>
+              <TabsList className="w-full sm:w-fit" aria-label="Sort destinations">
+                {MODES.map((m) => (
+                  <TabsTrigger key={m.value} value={m.value}>
+                    <m.Icon aria-hidden />
+                    {m.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+            <p className="text-sm text-muted-foreground" aria-live="polite">
+              {MODES.find((m) => m.value === mode)?.hint}
+            </p>
+          </div>
           <ol className="flex flex-col gap-3" data-testid="result-list" data-mode={mode}>
             {sorted.map((card, i) => (
               <ResultCard
@@ -234,9 +257,14 @@ function ResultCard({
   onLock: (() => void) | null
 }) {
   const level = card.priceLevel === 'unknown' ? null : LEVEL_BADGE[card.priceLevel]
+  const top = rank === 1 && !locked
   return (
     <li
-      className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 sm:p-5"
+      className={cn(
+        'surface flex flex-col gap-3 p-4 sm:p-5',
+        lockedHere && 'border-success ring-2 ring-success/25',
+        top && 'border-sun ring-2 ring-sun/50',
+      )}
       data-testid="result-card"
       data-iata={card.iata}
       data-complete={card.complete ? '1' : '0'}
@@ -246,19 +274,34 @@ function ResultCard({
     >
       {demo && <DemoLabel />}
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-12 shrink-0 items-center justify-center rounded-md bg-secondary font-mono text-sm font-semibold">
+        <div
+          className={cn(
+            'relative flex h-12 w-14 shrink-0 items-center justify-center rounded-lg font-mono text-sm font-bold',
+            lockedHere ? 'bg-success text-success-foreground' : 'bg-accent text-accent-foreground',
+          )}
+        >
           {card.iata}
+          {rank !== null && (
+            <span
+              className={cn(
+                'absolute -left-2 -top-2 flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-[11px] font-bold ring-2 ring-card',
+                rank === 1 ? 'bg-sun text-sun-foreground' : 'bg-foreground text-background',
+              )}
+            >
+              #{rank}
+            </span>
+          )}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-1.5">
-            {rank !== null && <span className="text-sm text-muted-foreground">#{rank}</span>}
-            <h3 className="font-semibold">{card.city}</h3>
+            <h3 className="font-display text-lg font-bold">{card.city}</h3>
             <span className="text-sm text-muted-foreground">{card.country}</span>
+            {top && <span className="text-xs font-semibold text-warning-ink">Top pick</span>}
           </div>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {lockedHere && (
-              <Badge variant="default" size="sm" data-testid="locked-badge">
-                <LockKeyhole className="h-3 w-3" aria-hidden /> Locked
+              <Badge variant="success" size="sm" data-testid="locked-badge">
+                <LockKeyhole aria-hidden /> Locked
               </Badge>
             )}
             {level && (
@@ -268,26 +311,26 @@ function ResultCard({
             )}
             {card.fitsAll === 1 && (
               <Badge variant="success" size="sm" data-testid="fits-all-badge">
-                Fits everyone’s budget
+                <Check aria-hidden /> Fits everyone’s budget
               </Badge>
             )}
             {card.fitsAll === 0 && (
-              <Badge variant="outline" size="sm" data-testid="fits-all-badge">
+              <Badge variant="warning" size="sm" data-testid="fits-all-badge">
                 Over someone’s budget
               </Badge>
             )}
             {card.arrival && (
               <Badge variant="info" size="sm" data-testid="arrival-badge">
-                {card.arrival}
+                <Clock aria-hidden /> {card.arrival}
               </Badge>
             )}
           </div>
         </div>
         <div className="shrink-0 text-right">
-          <p className="text-lg font-semibold tabular-nums" data-testid="group-total">
+          <p className="font-display text-2xl font-bold tabular-nums" data-testid="group-total">
             {card.complete ? usd(card.groupTotal) : '—'}
           </p>
-          <p className="text-xs text-muted-foreground">group total</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">group total</p>
         </div>
       </div>
 
@@ -306,19 +349,25 @@ function ResultCard({
         )
       )}
 
-      <ul className="flex flex-col divide-y divide-border rounded-md border border-border">
+      <ul className="flex flex-col divide-y divide-border overflow-hidden rounded-lg border border-border">
         {card.people.map((p) => (
           <PersonRow key={p.travelerId} person={p} />
         ))}
       </ul>
 
       {card.own && (
-        <p className="flex items-start gap-1.5 text-sm" data-testid="own-fit">
+        <p
+          className={cn(
+            'flex items-start gap-2 rounded-lg px-3 py-2 text-sm',
+            card.own.fits ? 'bg-success/10' : 'bg-destructive/10',
+          )}
+          data-testid="own-fit"
+        >
           <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
           <span>
             <span className="text-muted-foreground">Only you see this: </span>
             your {usd(card.own.price)} fare is{' '}
-            <span className={cn('font-medium', card.own.fits ? 'text-success' : 'text-destructive')}>
+            <span className={cn('font-semibold', card.own.fits ? 'text-success-ink' : 'text-destructive')}>
               {card.own.diff === 0 ? 'exactly' : `${usd(Math.abs(card.own.diff))} ${card.own.fits ? 'under' : 'over'}`}
             </span>{' '}
             your {usd(card.own.budget)} budget.
@@ -326,10 +375,10 @@ function ResultCard({
         </p>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
         <VoteButton tripId={tripId} card={card} locked={locked} />
         {onLock && (
-          <Button type="button" size="sm" variant="outline" onClick={onLock} data-testid="lock-button">
+          <Button type="button" size="sm" variant="ink" onClick={onLock} data-testid="lock-button">
             <LockKeyhole aria-hidden />
             Lock this destination
           </Button>
@@ -375,13 +424,18 @@ function PersonRow({ person }: { person: ResultPerson }) {
     )
   }
   return (
-    <li className="flex items-start gap-3 px-3 py-2.5 text-sm" data-testid="result-person" data-traveler={person.displayName}>
+    <li
+      className="flex items-start gap-3 px-3 py-2.5 text-sm transition-colors hover:bg-accent/40"
+      data-testid="result-person"
+      data-traveler={person.displayName}
+    >
+      <PersonAvatar id={person.travelerId} name={person.displayName} size="sm" className="mt-0.5" />
       <div className="min-w-0 flex-1">
         <p className="font-medium">{name}</p>
         <p className="mt-0.5 break-words text-xs">{detail}</p>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1">
-        <span className="font-semibold tabular-nums" data-testid="person-price">
+        <span className="font-mono font-semibold tabular-nums" data-testid="person-price">
           {f?.status === 'ok' ? usd(f.price) : '—'}
         </span>
         {f?.status === 'ok' && !f.home && f.bookingUrl && (
@@ -389,7 +443,7 @@ function PersonRow({ person }: { person: ResultPerson }) {
             href={f.bookingUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-0.5 text-xs text-primary underline-offset-4 hover:underline"
+            className="inline-flex items-center gap-1 rounded-md bg-accent px-2 py-0.5 text-xs font-semibold text-accent-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
             aria-label={`Book ${person.isMe ? 'your' : `${person.displayName}’s`} flight on Google Flights`}
           >
             Book <ExternalLink className="h-3 w-3" aria-hidden />
@@ -416,7 +470,7 @@ function VoteButton({ tripId, card, locked }: { tripId: string; card: Card; lock
       <Button
         type="button"
         size="sm"
-        variant={mine ? 'default' : 'outline'}
+        variant={mine ? 'success' : 'outline'}
         aria-pressed={mine}
         aria-label={`${mine ? 'Remove your vote for' : 'Vote for'} ${card.city}`}
         onClick={() => void toggle()}
@@ -424,10 +478,14 @@ function VoteButton({ tripId, card, locked }: { tripId: string; card: Card; lock
         disabled={!ready || locked || vote.pending}
         data-testid="vote-button"
       >
-        {!vote.pending && <ThumbsUp aria-hidden />}
+        {!vote.pending && (mine ? <Check key="voted" className="pop" aria-hidden /> : <ThumbsUp aria-hidden />)}
         {mine ? 'Voted' : 'Vote'}
       </Button>
-      <span className="text-sm text-muted-foreground" data-testid="vote-count" data-count={count}>
+      <span
+        className={cn('text-sm', count > 0 ? 'font-medium text-foreground' : 'text-muted-foreground')}
+        data-testid="vote-count"
+        data-count={count}
+      >
         {count === 0 ? 'No votes yet' : `${count} ${count === 1 ? 'vote' : 'votes'}: ${voters.join(', ')}`}
       </span>
     </div>

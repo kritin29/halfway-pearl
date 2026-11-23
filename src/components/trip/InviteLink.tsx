@@ -19,7 +19,7 @@ export function InviteLink({ inviteCode }: { inviteCode: string }) {
   }
 
   return (
-    <section aria-labelledby="invite-heading" className="rounded-lg border border-border bg-card p-4 sm:p-5">
+    <section aria-labelledby="invite-heading" className="surface p-4 sm:p-5">
       <h2 id="invite-heading" className="text-base font-semibold">
         Invite friends
       </h2>

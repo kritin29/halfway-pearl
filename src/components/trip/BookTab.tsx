@@ -11,8 +11,8 @@
  */
 import { useState } from 'react'
 import { useMutations, useQuery, type RecordData } from 'deepspace'
-import { Check, ExternalLink, Home, Mail, PlaneTakeoff } from 'lucide-react'
-import { Badge, Button, cn, useToast } from '@/components/ui'
+import { CalendarDays, Check, ExternalLink, Home, LockKeyhole, Mail, PartyPopper, PlaneTakeoff, Users } from 'lucide-react'
+import { Badge, Button, buttonVariants, cn, useToast } from '@/components/ui'
 import { EmptyNote, ErrorState, LoadingState, Retryable } from '@/components/AsyncState'
 import { useAction } from '@/hooks/useAction'
 import { googleFlightsUrl, normalizeHomes } from '@/lib/flights'
@@ -23,6 +23,7 @@ import { isGhostId, type CandidateData, type TravelerData, type TripData } from 
 import { DEMO_EMAILS_OFF, isDemoTrip } from '@/lib/demo'
 import { DemoLabel } from './DemoLabel'
 import { FareWatch } from './FareWatch'
+import { PersonAvatar } from './PersonAvatar'
 
 interface LockReport {
   emails: {
@@ -87,15 +88,35 @@ function BookContent({ trip, me, onRetry }: { trip: RecordData<TripData>; me: st
 
   return (
     <div className="flex flex-col gap-4" data-testid="book">
-      <section className="rounded-lg border border-border bg-card p-4 sm:p-5" data-testid="locked-destination" data-iata={iata}>
-        {demo && <DemoLabel className="mb-3" />}
-        <p className="text-sm text-muted-foreground">You’re all going to</p>
-        <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
-          <h2 className="text-2xl font-semibold tracking-tight">{city}</h2>
-          <span className="font-mono text-sm text-muted-foreground">{iata}</span>
-          {destination?.country && <span className="text-sm text-muted-foreground">{destination.country}</span>}
+      <section
+        className="relative isolate overflow-hidden rounded-2xl bg-gradient-to-br from-[#06513a] via-success to-info p-5 text-white shadow-[0_18px_40px_-20px_rgba(6,81,58,0.8)] sm:p-6"
+        data-testid="locked-destination"
+        data-iata={iata}
+      >
+        {demo && <DemoLabel className="mb-3 flex" />}
+        <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-white/85">
+          <LockKeyhole className="h-3.5 w-3.5" aria-hidden /> Locked · You’re all going to
+        </p>
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+          <div className="min-w-0">
+            <h2 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">{city}</h2>
+            {destination?.country && <p className="text-sm text-white/85">{destination.country}</p>}
+          </div>
+          <span className="font-mono text-5xl font-bold leading-none tracking-tight text-white/90 sm:text-6xl" aria-hidden>
+            {iata}
+          </span>
+          <span className="sr-only">{iata}</span>
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">{dateRange(trip.data.outboundDate, trip.data.returnDate)}</p>
+        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 border-t border-dashed border-white/35 pt-3 text-sm text-white/90">
+          <span className="inline-flex items-center gap-1.5">
+            <CalendarDays className="h-4 w-4" aria-hidden />
+            {dateRange(trip.data.outboundDate, trip.data.returnDate)}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Users className="h-4 w-4" aria-hidden />
+            {rows.length} {rows.length === 1 ? 'traveler' : 'travelers'}
+          </span>
+        </div>
       </section>
 
       {mine && (
@@ -150,10 +171,13 @@ function YourFlight({
   const stops = typeof fare?.stops === 'number' ? fare.stops : null
 
   return (
-    <section className="rounded-lg border border-border bg-card p-4 sm:p-5" data-testid="your-flight">
+    <section className="surface p-4 sm:p-5" data-testid="your-flight">
       {demo && <DemoLabel className="mb-3" />}
       <h2 className="flex items-center gap-2 text-base font-semibold">
-        <PlaneTakeoff className="h-4 w-4" aria-hidden /> Your flight
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+          <PlaneTakeoff className="h-4 w-4" aria-hidden />
+        </span>
+        Your flight
       </h2>
       {home ? (
         <p className="mt-2 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -161,7 +185,7 @@ function YourFlight({
         </p>
       ) : hasFare ? (
         <>
-          <p className="mt-2 text-lg font-semibold tabular-nums" data-testid="your-fare">
+          <p className="mt-3 font-display text-3xl font-bold tabular-nums" data-testid="your-fare">
             {usd(fare.price ?? null)} <span className="text-sm font-normal text-muted-foreground">round trip</span>
           </p>
           <p className="mt-0.5 break-words text-sm text-muted-foreground">
@@ -185,7 +209,7 @@ function YourFlight({
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          className={cn(buttonVariants({ size: 'lg' }), 'mt-4 w-full sm:w-auto')}
           data-testid="your-booking-link"
         >
           {hasFare ? 'Book on Google Flights' : 'Search Google Flights'} <ExternalLink className="h-4 w-4" aria-hidden />
@@ -209,15 +233,20 @@ function Checklist({
   demo: boolean
 }) {
   const booked = rows.filter((r) => r.data.booked === 1).length
+  const everyone = rows.length > 0 && booked === rows.length
   return (
-    <section className="rounded-lg border border-border bg-card p-4 sm:p-5" aria-labelledby="checklist-heading">
+    <section
+      className={cn('surface p-4 transition-colors sm:p-5', everyone && 'border-success/50 bg-success/5')}
+      aria-labelledby="checklist-heading"
+      id="booking-checklist"
+    >
       {demo && <DemoLabel className="mb-3" />}
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="checklist-heading" className="text-base font-semibold">
           Who’s booked
         </h2>
         <p
-          className="text-sm font-medium tabular-nums"
+          className={cn('text-sm font-semibold tabular-nums', everyone ? 'text-success-ink' : 'text-foreground')}
           data-testid="booked-count"
           data-booked={booked}
           data-total={rows.length}
@@ -227,7 +256,7 @@ function Checklist({
         </p>
       </div>
       <div
-        className="mt-2 h-2 overflow-hidden rounded-full bg-secondary"
+        className="mt-2 h-2.5 overflow-hidden rounded-full bg-muted"
         role="progressbar"
         aria-label="Travelers booked"
         aria-valuemin={0}
@@ -235,11 +264,16 @@ function Checklist({
         aria-valuenow={booked}
       >
         <div
-          className="h-full rounded-full bg-success transition-[width] duration-500"
+          className="h-full rounded-full bg-gradient-to-r from-success to-[#16a37a] transition-[width] duration-500"
           style={{ width: `${rows.length ? (booked / rows.length) * 100 : 0}%` }}
         />
       </div>
-      <ul className="mt-3 flex flex-col divide-y divide-border" data-testid="booking-checklist">
+      {everyone && (
+        <p role="status" className="pop mt-3 inline-flex items-center gap-2 text-sm font-semibold text-success-ink">
+          <PartyPopper className="h-4 w-4" aria-hidden /> Everyone’s booked. Enjoy the trip!
+        </p>
+      )}
+      <ul className="mt-3 flex flex-col gap-2" data-testid="booking-checklist">
         {rows.map((row) => (
           <ChecklistRow key={row.recordId} tripId={tripId} row={row} me={me} isOrganizer={isOrganizer} />
         ))}
@@ -275,6 +309,7 @@ function ChecklistRow({
       setSaving(true)
       try {
         await putConfirmed(row.recordId, { booked: next })
+        if (next === 1) toast.success('You’re marked as booked', 'Everyone on the trip sees it now.')
       } catch (e) {
         toast.error('Could not update your booking status', e instanceof Error ? e.message : undefined)
       } finally {
@@ -283,6 +318,7 @@ function ChecklistRow({
     } else {
       const res = await ghostAction.run({ tripId, ghostId: row.data.userId, booked: next === 1 })
       if (res && !res.success) toast.error(`Could not update ${row.data.displayName}`, res.error)
+      else if (res?.success && next === 1) toast.success(`${row.data.displayName} is marked as booked`)
     }
   }
 
@@ -297,22 +333,25 @@ function ChecklistRow({
 
   return (
     <li
-      className="flex flex-wrap items-center gap-3 py-2.5"
+      className={cn(
+        'flex flex-wrap items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors duration-300',
+        done ? 'border-success/30 bg-success/8' : 'border-border bg-card',
+        isMe && !done && 'border-primary/40 bg-accent/40',
+      )}
       data-testid="checklist-row"
       data-traveler={row.data.displayName}
       data-booked={done ? '1' : '0'}
     >
-      <span
-        className={cn(
-          'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border',
-          done ? 'border-success bg-success text-success-foreground' : 'border-border text-transparent',
+      <span className="relative shrink-0" aria-hidden>
+        <PersonAvatar id={row.data.userId} name={row.data.displayName} />
+        {done && (
+          <span className="pop absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-success text-success-foreground ring-2 ring-card">
+            <Check className="h-3 w-3" strokeWidth={3} />
+          </span>
         )}
-        aria-hidden
-      >
-        <Check className="h-4 w-4" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">
+        <p className="text-sm font-semibold">
           {name}{' '}
           {ghost && (
             <Badge variant="outline" size="sm">
@@ -320,7 +359,10 @@ function ChecklistRow({
             </Badge>
           )}
         </p>
-        <p className="text-xs text-muted-foreground" data-testid="checklist-status">
+        <p
+          className={cn('text-xs', done ? 'font-semibold text-success-ink' : 'text-muted-foreground')}
+          data-testid="checklist-status"
+        >
           {done ? 'Booked' : 'Not yet'}
         </p>
       </div>
@@ -328,13 +370,14 @@ function ChecklistRow({
         <Button
           type="button"
           size="sm"
-          variant={done ? 'outline' : 'default'}
+          variant={done ? 'ghost' : isMe ? 'success' : 'outline'}
           aria-pressed={done}
           onClick={() => void toggle()}
           loading={pending}
           disabled={pending || (isMe && !ready)}
           className="w-full sm:w-auto"
         >
+          {!done && !pending && <Check aria-hidden />}
           {label}
         </Button>
       )}
@@ -348,7 +391,7 @@ function OrganizerTools({ trip, iata, demo }: { trip: RecordData<TripData>; iata
 
   if (demo) {
     return (
-      <section className="rounded-lg border border-border bg-card p-4 sm:p-5" aria-label="Organizer tools" data-testid="demo-emails-off">
+      <section className="surface p-4 sm:p-5" aria-label="Organizer tools" data-testid="demo-emails-off">
         <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
           <Mail className="h-4 w-4 shrink-0" aria-hidden />
           {DEMO_EMAILS_OFF} In a real trip, everyone gets their own booking link by email when you lock.
@@ -365,7 +408,7 @@ function OrganizerTools({ trip, iata, demo }: { trip: RecordData<TripData>; iata
   }
 
   return (
-    <section className="rounded-lg border border-border bg-card p-4 sm:p-5" aria-label="Organizer tools">
+    <section className="surface p-4 sm:p-5" aria-label="Organizer tools">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
           Everyone got an email with their own booking link when you locked. Resending only emails people who didn’t get one.

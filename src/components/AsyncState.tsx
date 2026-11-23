@@ -13,11 +13,11 @@ export function LoadingState({ label, className }: { label: string; className?: 
       role="status"
       aria-live="polite"
       className={cn(
-        'flex items-center justify-center gap-3 rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground',
+        'flex items-center justify-center gap-3 surface p-6 text-sm text-muted-foreground',
         className,
       )}
     >
-      <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden />
+      <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden />
       {label}
     </div>
   )
@@ -42,12 +42,12 @@ export function ErrorState({
     <div
       role="alert"
       data-testid={testId}
-      className={cn('rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3', className)}
+      className={cn('rounded-xl border border-destructive/30 bg-destructive/8 px-4 py-3', className)}
     >
       <div className="flex items-start gap-2">
         <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden />
         <div className="flex min-w-0 flex-col gap-2">
-          <p className="text-sm font-medium text-destructive">{title}</p>
+          <p className="text-sm font-semibold text-destructive">{title}</p>
           {message && <p className="text-sm text-muted-foreground">{message}</p>}
           {onRetry && (
             <Button type="button" variant="outline" size="sm" className="w-fit" onClick={onRetry}>
@@ -62,8 +62,8 @@ export function ErrorState({
 
 export function EmptyNote({ title, children, className }: { title: string; children?: ReactNode; className?: string }) {
   return (
-    <div className={cn('rounded-lg border border-dashed border-border px-4 py-8 text-center', className)}>
-      <p className="text-sm font-medium text-foreground">{title}</p>
+    <div className={cn('rounded-2xl border-2 border-dashed border-primary/25 bg-card/60 px-4 py-10 text-center', className)}>
+      <p className="font-display text-base font-bold text-foreground">{title}</p>
       {children && <div className="mt-1 text-sm text-muted-foreground">{children}</div>}
     </div>
   )

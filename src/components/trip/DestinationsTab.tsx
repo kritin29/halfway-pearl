@@ -7,7 +7,7 @@
  */
 import { useId, useState } from 'react'
 import { useMutations, useQuery, type RecordData } from 'deepspace'
-import { Compass, Plane, Sparkles, Trash2 } from 'lucide-react'
+import { Compass, Hand, Plane, Sparkles, Trash2, type LucideIcon } from 'lucide-react'
 import { Badge, Button, ConfirmModal, useToast } from '@/components/ui'
 import { EmptyNote, ErrorState, LoadingState, Retryable } from '@/components/AsyncState'
 import { useAction, type ActionError } from '@/hooks/useAction'
@@ -85,7 +85,7 @@ function DestinationsContent({
     <div className="flex flex-col gap-6">
       <section
         aria-labelledby="destinations-heading"
-        className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4 sm:p-5"
+        className="flex flex-col gap-4 surface p-4 sm:p-5"
       >
         <div className="flex items-baseline justify-between gap-3">
           <h2 id="destinations-heading" className="text-base font-semibold">
@@ -296,10 +296,31 @@ function AddDestination({
   )
 }
 
-const SOURCE_BADGE: Record<CandidateSource, { label: string; variant: 'info' | 'secondary' | 'outline'; title: string }> = {
-  ai: { label: 'AI', variant: 'info', title: 'Suggested by AI from the vibe and everyone’s home airports' },
-  midpoint: { label: 'Middle', variant: 'secondary', title: 'Near the geographic middle of everyone’s home airports' },
-  manual: { label: 'Manual', variant: 'outline', title: 'Added by a traveler' },
+const SOURCE_BADGE: Record<
+  CandidateSource,
+  { label: string; variant: 'primary' | 'info' | 'secondary'; title: string; Icon: LucideIcon; tile: string }
+> = {
+  ai: {
+    label: 'AI',
+    variant: 'primary',
+    title: 'Suggested by AI from the vibe and everyone’s home airports',
+    Icon: Sparkles,
+    tile: 'bg-accent text-accent-foreground',
+  },
+  midpoint: {
+    label: 'Middle',
+    variant: 'info',
+    title: 'Near the geographic middle of everyone’s home airports',
+    Icon: Compass,
+    tile: 'bg-info/12 text-info-ink',
+  },
+  manual: {
+    label: 'Manual',
+    variant: 'secondary',
+    title: 'Added by a traveler',
+    Icon: Hand,
+    tile: 'bg-coral/12 text-coral-ink',
+  },
 }
 
 function CandidateList({
@@ -333,15 +354,23 @@ function CandidateList({
           const badge = SOURCE_BADGE[c.data.source] ?? SOURCE_BADGE.manual
           const by = c.data.addedBy === me ? 'you' : names.get(c.data.addedBy)
           return (
-            <li key={c.recordId} data-testid="candidate" data-iata={c.data.iata} className="flex items-start gap-3 py-3">
-              <div className="flex h-10 w-12 shrink-0 items-center justify-center rounded-md bg-secondary font-mono text-sm font-semibold">
+            <li
+              key={c.recordId}
+              data-testid="candidate"
+              data-iata={c.data.iata}
+              className="-mx-2 flex items-start gap-3 rounded-lg px-2 py-3 transition-colors hover:bg-accent/40"
+            >
+              <div
+                className={`flex h-11 w-14 shrink-0 items-center justify-center rounded-lg font-mono text-sm font-bold ${badge.tile}`}
+              >
                 {c.data.iata}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                  <span className="font-medium">{c.data.city}</span>
+                  <span className="font-semibold">{c.data.city}</span>
                   <span className="text-sm text-muted-foreground">{c.data.country}</span>
                   <Badge variant={badge.variant} size="sm" title={badge.title} data-testid="candidate-source">
+                    <badge.Icon aria-hidden />
                     {badge.label}
                   </Badge>
                 </div>
@@ -356,7 +385,7 @@ function CandidateList({
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="shrink-0"
+                  className="shrink-0 hover:bg-destructive/10 hover:text-destructive"
                   aria-label={`Remove ${c.data.iata}`}
                   onClick={() => setRemoving(c)}
                 >
@@ -423,7 +452,7 @@ function FindFares({
   const disabled = !isOrganizer || !ready || searching || start.pending || hint !== null
 
   return (
-    <section aria-labelledby="fares-heading" className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 sm:p-5">
+    <section aria-labelledby="fares-heading" className="flex flex-col gap-3 surface p-4 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 id="fares-heading" className="text-base font-semibold">

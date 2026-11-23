@@ -73,7 +73,7 @@ export function PrivateBudget({
   return (
     <section
       aria-labelledby="budget-heading"
-      className="rounded-lg border border-border bg-card p-4 sm:p-5"
+      className="surface p-4 sm:p-5"
       data-testid="budget-panel"
       // How many budget rows this browser received: only ever my own (0 or 1).
       // tests/trips.spec.ts reads it to prove another member's budget never arrives.

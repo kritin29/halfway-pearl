@@ -70,7 +70,7 @@ export function YourSettings({ row }: { row: RecordData<TravelerData> }) {
   return (
     <section
       aria-labelledby="your-settings-heading"
-      className="rounded-lg border border-border bg-card p-4 sm:p-5"
+      className="surface p-4 sm:p-5"
       data-testid="your-settings"
     >
       <h2 id="your-settings-heading" className="text-base font-semibold">

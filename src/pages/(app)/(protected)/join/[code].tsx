@@ -113,7 +113,7 @@ function InviteCard({ code, trip }: { code: string; trip: InvitePreview }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <section className="rounded-lg border border-border bg-card p-5" data-testid="invite-card">
+      <section className="surface p-5" data-testid="invite-card">
         {trip.isDemo && <DemoLabel className="mb-3" />}
         <p className="text-sm text-muted-foreground">You’re invited to</p>
         <h2 className="mt-1 text-xl font-semibold" data-testid="invite-trip-name">
