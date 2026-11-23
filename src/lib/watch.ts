@@ -117,12 +117,14 @@ export interface WatchTripCandidate {
   watchEnabled: unknown
   status: unknown
   outboundDate: unknown
+  /** Demo trips (isDemo = 1) are never watched by the cron (SPEC §14). */
+  isDemo?: unknown
 }
 
 /**
- * The trips the daily cron watches: watch on, status results or locked, and
- * the outbound date more than a day away. Soonest trips first (their prices
- * matter most), then id; at most `maxWatchTripsPerCronRun`.
+ * The trips the daily cron watches: watch on, not a demo trip, status results
+ * or locked, and the outbound date more than a day away. Soonest trips first
+ * (their prices matter most), then id; at most `maxWatchTripsPerCronRun`.
  */
 export function selectWatchTrips<T extends WatchTripCandidate>(
   trips: readonly T[],
@@ -132,6 +134,7 @@ export function selectWatchTrips<T extends WatchTripCandidate>(
   const eligible = trips.filter(
     (t) =>
       t.watchEnabled === 1 &&
+      t.isDemo !== 1 &&
       (t.status === 'results' || t.status === 'locked') &&
       typeof t.outboundDate === 'string' &&
       isWatchWindowOpen(t.outboundDate, today, limits),

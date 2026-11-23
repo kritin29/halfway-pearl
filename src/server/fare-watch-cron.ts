@@ -3,7 +3,7 @@
  * trip worth watching.
  *
  *   trips with watchEnabled = 1 (the `where` is equality-only) →
- *   status results or locked, outbound date more than a day away
+ *   not a demo trip (SPEC §14) → status results or locked, outbound date more than a day away
  *   (src/lib/watch.ts `selectWatchTrips`, soonest first, max 10) →
  *   per trip: skip if a watch run is already queued, skip if today's
  *   once-per-trip marker is set, skip if the caps say no (3 watch checks per
@@ -16,6 +16,7 @@
 import type { ActionTools } from 'deepspace/worker'
 import type { Env } from '../../worker'
 import { decideRunStart, usageDay, usageKeys } from '../lib/caps'
+import { isDemoTrip } from '../lib/demo'
 import { LIMITS, type Limits } from '../lib/limits'
 import { dateInZone, isWatchPending, selectWatchTrips } from '../lib/watch'
 import { isTestTrip } from './test-seam'
@@ -55,7 +56,13 @@ export async function runFareWatchCron(
 
   const { records } = must(await tools.query('trips', { where: { watchEnabled: 1 } }), 'query watched trips')
   const { selected, eligible } = selectWatchTrips(
-    records.map((r) => ({ id: r.recordId, watchEnabled: r.data.watchEnabled, status: r.data.status, outboundDate: r.data.outboundDate })),
+    records.map((r) => ({
+      id: r.recordId,
+      watchEnabled: r.data.watchEnabled,
+      status: r.data.status,
+      outboundDate: r.data.outboundDate,
+      isDemo: r.data.isDemo,
+    })),
     dateInZone(now),
     limits,
   )
@@ -65,6 +72,7 @@ export async function runFareWatchCron(
     const access = await loadTrip(tools, pick.id)
     if (!access.ok) continue
     const trip = access.trip
+    if (isDemoTrip(trip.data)) continue // filtered above; checked again on the fresh row
     if (isWatchPending(trip.data.watchQueuedAt, now, limits)) {
       report.pending++
       continue
