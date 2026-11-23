@@ -32,6 +32,10 @@ describe('text', () => {
     expect(value(text('  Spring \n\t break  ', 'Name', { max: 80 }))).toBe('Spring break')
     expect(value(text('Bob‮evil\u0007', 'Name', { max: 80 }))).toBe('Bobevil')
   })
+  it('turns a line break inside a name into a space instead of joining the words', () => {
+    expect(value(text('Sam' + String.fromCharCode(10) + 'Smith', 'Name', { max: 80 }))).toBe('Sam Smith')
+    expect(value(text('a' + String.fromCharCode(9) + 'b', 'Name', { max: 80 }))).toBe('a b')
+  })
   it('enforces required and max length', () => {
     expect(text('', 'Name', { max: 5 }).ok).toBe(false)
     expect(text('   ', 'Name', { max: 5 }).ok).toBe(false)

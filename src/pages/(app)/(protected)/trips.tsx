@@ -219,6 +219,9 @@ function CreateTripForm() {
   }
 
   const error = formError ?? create.error?.message ?? null
+  // The server checks dates against the UTC day (usageDay), which is already
+  // tomorrow in the Americas each evening; never offer a day it would refuse.
+  const earliestDate = [localToday(), usageDay(new Date())].sort()[1]
   return (
     <section aria-labelledby="create-trip-heading" className="surface p-4 sm:p-6">
       <h2 id="create-trip-heading" className="flex items-center gap-2 font-display text-xl font-bold">
@@ -244,7 +247,7 @@ function CreateTripForm() {
             <Input
               id="trip-outbound"
               type="date"
-              min={localToday()}
+              min={earliestDate}
               value={outboundDate}
               onChange={(e) => setOutboundDate(e.target.value)}
             />
@@ -254,7 +257,7 @@ function CreateTripForm() {
             <Input
               id="trip-return"
               type="date"
-              min={outboundDate || localToday()}
+              min={outboundDate || earliestDate}
               value={returnDate}
               onChange={(e) => setReturnDate(e.target.value)}
             />

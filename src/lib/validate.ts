@@ -39,7 +39,13 @@ export function text(
     return opts.optional ? ok('') : bad(`${field} is required.`)
   }
   if (typeof value !== 'string') return bad(`${field} must be text.`)
-  const cleaned = value.replace(UNSAFE_CHARS, '').replace(/\s+/g, ' ').trim()
+  // Line breaks and tabs become spaces ("Sam\nSmith" -> "Sam Smith"); the
+  // other control and bidi characters are removed.
+  const cleaned = value
+    .replace(/[\t\n\v\f\r]/g, ' ')
+    .replace(UNSAFE_CHARS, '')
+    .replace(/\s+/g, ' ')
+    .trim()
   if (!cleaned) return opts.optional ? ok('') : bad(`${field} is required.`)
   if (cleaned.length > opts.max) return bad(`${field} must be at most ${opts.max} characters.`)
   return ok(cleaned)
