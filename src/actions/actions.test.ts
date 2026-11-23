@@ -378,6 +378,25 @@ describe('ghosts', () => {
     expect(store.rows('fares').map((f) => f.recordId)).toEqual(['f-bob'])
     expect(await call(removeGhost, ALICE, { tripId, ghostId })).toMatchObject({ code: 'not_found' })
   })
+
+  it('the roster is frozen while a search runs; a locked trip takes no new ghosts', async () => {
+    const { tripId } = await tripWithBob()
+    const { ghostId } = data<{ ghostId: string }>(
+      await call(addGhost, ALICE, { tripId, displayName: 'G', homeAirports: ['ORD'] }),
+    )
+    const params = { tripId, displayName: 'H', homeAirports: ['DEN'] }
+
+    await store.toolsFor(ALICE).update('trips', tripId, { status: 'searching' })
+    expect(await call(addGhost, ALICE, params)).toMatchObject({ code: 'search_running' })
+    expect(await call(removeGhost, ALICE, { tripId, ghostId })).toMatchObject({ code: 'search_running' })
+
+    await store.toolsFor(ALICE).update('trips', tripId, { status: 'locked' })
+    expect(await call(addGhost, ALICE, params)).toMatchObject({ code: 'trip_locked' })
+    expect(travelersOf(tripId)).toHaveLength(3)
+    // Removing someone who isn't coming is still allowed after the lock.
+    data(await call(removeGhost, ALICE, { tripId, ghostId }))
+    expect(travelersOf(tripId)).toHaveLength(2)
+  })
 })
 
 describe('previewInvite', () => {

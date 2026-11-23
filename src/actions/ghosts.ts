@@ -78,11 +78,27 @@ async function findGhost(tools: Parameters<typeof queryTravelers>[0], tripId: st
   return row && row.data.isGhost === 1 ? row : null
 }
 
+/**
+ * The traveler list is frozen while a fare search runs: the job loaded it at
+ * the start, so a ghost added or removed mid-run would be priced (or not)
+ * against the wrong group. A locked trip takes no new travelers (same as
+ * joinTrip).
+ */
+function rosterFrozen(status: string, adding: boolean) {
+  if (status === 'searching') {
+    return fail('search_running', 'Fares are being checked right now. Try again when the search finishes.')
+  }
+  if (adding && status === 'locked') return fail('trip_locked', 'This trip is locked, so nobody new can be added.')
+  return null
+}
+
 export const addGhost = defineAction<Env>('addGhost', async ({ userId, params, tools }) => {
   const tripId = recordId(params.tripId, 'Trip')
   if (!tripId.ok) return fail('invalid_params', tripId.error)
   const access = await requireOrganizer(tools, tripId.value, userId)
   if (!access.ok) return access.result
+  const blocked = rosterFrozen(access.trip.data.status, true)
+  if (blocked) return blocked
   const fields = ghostFields(params, true)
   if (!fields.ok) return fail('invalid_params', fields.error)
 
@@ -136,6 +152,8 @@ export const removeGhost = defineAction<Env>('removeGhost', async ({ userId, par
   if (!ghostId.ok) return fail('invalid_params', ghostId.error)
   const access = await requireOrganizer(tools, tripId.value, userId)
   if (!access.ok) return access.result
+  const blocked = rosterFrozen(access.trip.data.status, false)
+  if (blocked) return blocked
 
   const ghost = await findGhost(tools, tripId.value, ghostId.value)
   if (!ghost) return fail('not_found', 'Traveler not found.')
