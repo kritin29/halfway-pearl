@@ -302,7 +302,9 @@ export const suggestCandidates = defineAction<Env>('suggestCandidates', async ({
 
   const text = extractResponseText(res.data) ?? ''
   const selection = selectSuggestions(parseSuggestionItems(text), {
-    existing: existing.map((c) => String(c.data.iata)),
+    // Travelers' home airports count as taken, like the geographic middle: the
+    // prompt asks the model to skip them, but that isn't enforced otherwise.
+    existing: [...existing.map((c) => String(c.data.iata)), ...homes.flat()],
     freeSlots: free,
   })
   const stayed = await insertCandidates(

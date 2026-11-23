@@ -362,6 +362,18 @@ describe('suggestCandidates (organizer, one AI call)', () => {
     expect(usageCount(usageKeys.aiUser(ALICE))).toBe(1)
   })
 
+  it('drops a suggestion that is a traveler’s home airport', async () => {
+    const { tripId } = await ready()
+    const homeIdea = JSON.stringify([
+      { iata: 'BOS', city: 'Boston', country: 'United States', why: 'Bob lives here.' },
+      { iata: 'MSY', city: 'New Orleans', country: 'United States', why: 'Easy from both.' },
+    ])
+    store.onIntegration(() => reply(homeIdea))
+    const res = data<{ added: Array<{ iata: string }>; dropped: number }>(await call(suggestCandidates, ALICE, { tripId }))
+    expect(res.added.map((a) => a.iata)).toEqual(['MSY'])
+    expect(res.dropped).toBe(1)
+  })
+
   it('fills only the free slots', async () => {
     const { tripId } = await ready()
     await fill(tripId, ['DEN', 'SEA', 'MIA', 'SAN']) // 5 of 6
