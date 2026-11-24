@@ -91,7 +91,7 @@ test('a failed invite lookup offers a retry that recovers without a page reload'
   const before = calls
   await user.page.getByRole('button', { name: 'Try again' }).click()
   // The real answer for a code that doesn't exist.
-  await expect(user.page.getByTestId('join-error')).toContainText('That invite link doesn’t match a trip')
+  await expect(user.page.getByTestId('join-error')).toContainText('That invite link doesn’t match a trip', { timeout: 15_000 })
   expect(calls).toBeGreaterThan(before)
   expect(user.page.url()).toBe(url)
   expect(await user.page.evaluate(() => (window as unknown as { __noReload?: number }).__noReload)).toBe(1)

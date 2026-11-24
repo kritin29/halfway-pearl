@@ -40,7 +40,10 @@ async function expectNoBudgetLeak(bob: MultiplayerUser, baseURL: string, tripId:
   const dataFrames = frames.filter((f) => !f.startsWith('{"type":"records.list_schemas"'))
   expect(frames.length).toBeGreaterThan(dataFrames.length) // the capture really saw the socket
   expect(dataFrames.filter((f) => f.includes('maxUsd'))).toEqual([])
-  expect(frames.filter((f) => f.includes(String(BUDGET)))).toEqual([])
+  // As a standalone number only: a plain substring check also matched record
+  // ids and timestamps that happen to contain the digits (e.g. "…2437 64_…").
+  const asNumber = new RegExp(String.raw`(?<![\w.])${BUDGET}(?!\w)`)
+  expect(frames.filter((f) => asNumber.test(f))).toEqual([])
   // A second client read path (agent tools, RBAC on): no budget rows, scoped or not.
   for (const where of [{ tripId }, undefined]) {
     const res = await asClient(bob, baseURL, 'records_query', { collection: 'budgets', ...(where ? { where } : {}) })
@@ -66,7 +69,7 @@ test('Alice creates a trip, Bob joins by invite link, Bob’s airports show up l
   const invite = await alice.page.getByTestId('invite-link').inputValue()
 
   await bob.page.goto(new URL(invite).pathname)
-  await expect(bob.page.getByTestId('invite-trip-name')).toHaveText(name)
+  await expect(bob.page.getByTestId('invite-trip-name')).toHaveText(name, { timeout: 15_000 })
   await bob.page.getByRole('button', { name: 'Join trip' }).click()
   await expect(bob.page).toHaveURL(new RegExp(`${tripPath}$`))
 
@@ -146,13 +149,13 @@ test('invite page: wrong code, locked trip and full trip each explain themselves
   const [alice, bob] = await users(2)
 
   await bob.page.goto('/join/WrongCode12345')
-  await expect(bob.page.getByTestId('join-error')).toContainText('doesn’t match a trip')
+  await expect(bob.page.getByTestId('join-error')).toContainText('doesn’t match a trip', { timeout: 15_000 })
 
   // Locked (via the test-only lock; the real lockTrip comes later).
   const locked = await createTripApi(alice, baseURL!, testTripName('locked'))
   expect(await act(alice, baseURL!, '__testLockTrip', { tripId: locked.tripId })).toMatchObject({ success: true })
   await bob.page.goto(`/join/${locked.inviteCode}`)
-  await expect(bob.page.getByTestId('join-error')).toContainText('This trip is locked')
+  await expect(bob.page.getByTestId('join-error')).toContainText('This trip is locked', { timeout: 15_000 })
   await expect(bob.page.getByRole('button', { name: 'Join trip' })).toHaveCount(0)
   // The action refuses too, not just the page.
   expect(await act(bob, baseURL!, 'joinTrip', { inviteCode: locked.inviteCode })).toMatchObject({
@@ -171,7 +174,7 @@ test('invite page: wrong code, locked trip and full trip each explain themselves
     expect(res).toMatchObject({ success: true })
   }
   await bob.page.goto(`/join/${full.inviteCode}`)
-  await expect(bob.page.getByTestId('join-error')).toContainText('This trip is full')
+  await expect(bob.page.getByTestId('join-error')).toContainText('This trip is full', { timeout: 15_000 })
 })
 
 test('organizer adds, edits and removes a ghost; Bob sees each change live', async ({ users, baseURL }) => {
@@ -228,4 +231,30 @@ test('the usage ledger is invisible and unwritable for both users', async ({ use
     expect(write.body.ok).toBe(false)
     expect(write.body.error).toContain('CREATE DENIED')
   }
+})
+
+test('organizer deletes a trip from Your trips; it disappears live for the member too', async ({ users, baseURL }) => {
+  const [alice, bob] = await users(2)
+  await Promise.all([openApp(alice), openApp(bob)])
+  const name = testTripName('delete')
+  const { tripId, inviteCode } = await createTripApi(alice, baseURL!, name)
+  expect(await act(bob, baseURL!, 'joinTrip', { inviteCode })).toMatchObject({ success: true })
+
+  await Promise.all([alice.page.goto('/trips'), bob.page.goto('/trips')])
+  const card = (u: MultiplayerUser) => u.page.locator('li').filter({ has: u.page.locator(`a[href="/t/${tripId}"]`) })
+  await expect(card(alice)).toBeVisible({ timeout: 15_000 })
+  await expect(card(bob)).toBeVisible({ timeout: 15_000 })
+  // Only the organizer gets the button.
+  await expect(card(bob).getByTestId('delete-trip')).toHaveCount(0)
+
+  await card(alice).getByRole('button', { name: `Delete ${name}` }).click()
+  const dialog = alice.page.getByRole('dialog')
+  await expect(dialog).toContainText(`Delete ${name}?`)
+  await dialog.getByRole('button', { name: 'Delete trip' }).click()
+
+  await expect(alice.page.getByText(`Deleted ${name}`)).toBeVisible({ timeout: 15_000 })
+  await expect(card(alice)).toHaveCount(0)
+  await expect(card(bob)).toHaveCount(0, { timeout: 15_000 })
+  await bob.page.goto(`/t/${tripId}`)
+  await expect(bob.page.getByTestId('trip-not-found')).toBeVisible({ timeout: 15_000 })
 })

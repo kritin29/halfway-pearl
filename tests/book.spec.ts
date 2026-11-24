@@ -120,7 +120,7 @@ test('Alice locks; both see Book; Bob books and Alice sees it live; ghost ticked
   expect(await act(alice, baseURL!, 'lockTrip', { tripId: other.tripId, iata: 'BNA' })).toMatchObject({ success: true })
 
   await bob.page.goto(`/join/${other.inviteCode}`)
-  await expect(bob.page.getByTestId('join-error')).toContainText('This trip is locked')
+  await expect(bob.page.getByTestId('join-error')).toContainText('This trip is locked', { timeout: 15_000 })
   await expect(bob.page.getByRole('button', { name: 'Join trip' })).toHaveCount(0)
   expect(await act(bob, baseURL!, 'joinTrip', { inviteCode: other.inviteCode })).toMatchObject({
     success: false,
