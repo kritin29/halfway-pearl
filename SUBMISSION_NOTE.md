@@ -47,4 +47,5 @@ The platform's shared SerpApi account has been out of searches for the whole bui
 - The cron has run once in production (Nov 23, success). No watched trip can get new prices until the quota is back, so the drop and under-budget emails have only been tested with mocks.
 - Concurrency (joins, the 6-destination limit, email claims, job retries) is tested with fakes, not under load on real Durable Objects.
 - Return-leg times aren't fetched (outbound only); real email delivery to an inbox is unconfirmed; phone layouts were checked in headless Chromium only.
+- Six open issues from the final review are documented with fixes (README "Known limitations", NOTES E9–E14). The main ones: a re-search during a provider outage can wipe earlier results, and removing a traveler can trigger a false price-drop email. Smaller ones: limits can be passed by clicking from several tabs at once, and a lock racing a new search from two tabs can undo the lock.
 - Next: hotels per destination, ±1-day flexible dates, a "nudge the unbooked" reminder, and leave/delete trip.

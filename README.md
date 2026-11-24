@@ -220,6 +220,13 @@ Source control is plain Git with GitHub as the source of truth (the DeepSpace cl
 - **Read access by `createdBy`.** On collections without an `ownerField` (candidates, fares, fareSnapshots), the row's creator keeps read access. Harmless today because nobody can leave a trip.
 - **Times are outbound-only** (return legs need a second request per itinerary), so red-eye and arrival alignment use the outbound flight; prices are round-trip.
 - **Fonts load from Google Fonts**, so visitors' browsers make a request to Google.
+- **Open issues from the final review** (details and IDs in `NOTES.md`, Phase 11):
+  - *A search during an outage can wipe earlier results (E9).* If the fare provider fails on a re-search, routes it couldn't re-check are marked as errors and the trip drops back to "gathering". Fix: on a provider outage, keep the previous fares, as the daily watch already does. SPEC §7 and §8 disagree here, so it needs a ruling first.
+  - *A smaller group can look like a price drop (E10).* The drop email compares group totals, so removing a traveler or loosening flight rules can announce "got cheaper". Fix: save which travelers each price snapshot covered, and only compare snapshots for the same group.
+  - *Limits can be passed by clicking from several tabs at once (E11).* Simultaneous requests all read the same count before any of them adds to it. The amounts are small. Fix: claim the slot first with a unique row (as emails already do), then undo the claim if the call isn't made.
+  - *Lock and a new search started at the same moment (E12)* from two organizer tabs can leave a locked trip unlocked after the emails went out. Fix: when the search finishes, re-read the trip and never move a locked trip back to results.
+  - *An email whose send result is unknown isn't retried for 10 minutes (E13).* This is deliberate, to avoid sending twice. Fix: treat a garbled reply as "maybe sent" and let the organizer's "Email booking links again" resend it after a short wait.
+  - *Smaller (E14):* a daily check fails and retries if a destination is removed mid-check; switching tabs discards unsaved edits on Crew; the guide can say "Lock the destination" when nothing is lockable yet; a malformed home-airport list could break one lock email; any signed-in user can open an empty collaboration or record room; the security policy doesn't restrict scripts. Fixes are listed in `NOTES.md`.
 - Phone layouts were checked at 390px in headless Chromium, not on a physical phone.
 
 ## What's next
