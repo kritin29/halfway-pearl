@@ -15,7 +15,8 @@
 
 import { useState } from 'react'
 import { Link, Outlet } from 'react-router-dom'
-import { AuthGate, AuthOverlay } from 'deepspace'
+import { AuthGate } from 'deepspace'
+import { SignInOverlay } from '@/components/SignInOverlay'
 import { Button } from '@/components/ui'
 import { pageTitle } from '@/brand'
 
@@ -38,6 +39,9 @@ function SignedOutPanel() {
         <p className="mt-2 text-sm text-muted-foreground">
           Your trips, invites and fares are only visible to the people on each trip.
         </p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          New here? Sign in with Google or GitHub; that creates your account.
+        </p>
         <Button className="mt-6 w-full" onClick={() => setShowAuthModal(true)}>
           Sign in
         </Button>
@@ -49,7 +53,7 @@ function SignedOutPanel() {
         </Link>
       </div>
 
-      {showAuthModal && <AuthOverlay onClose={() => setShowAuthModal(false)} />}
+      {showAuthModal && <SignInOverlay onClose={() => setShowAuthModal(false)} />}
     </div>
   )
 }

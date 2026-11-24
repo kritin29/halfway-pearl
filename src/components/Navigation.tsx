@@ -1,7 +1,7 @@
 /**
  * Top nav: the Halfway wordmark, nav.ts links (just "Trips"), sign-in via
- * <AuthOverlay>, and sign-out. With one link there's no mobile menu; the
- * link stays visible at every width. Keep the data-testid hooks
+ * <SignInOverlay> (the SDK overlay with Halfway's wording), and sign-out.
+ * With one link there's no mobile menu; the link stays visible at every width. Keep the data-testid hooks
  * (`app-navigation`, `nav-sign-in-button`, `nav-user-name`, `nav-user-email`)
  * — the shipped tests rely on them. `nav-user-email` is the one that carries
  * an identity the test can check exactly: a display name is optional, the
@@ -10,7 +10,8 @@
 
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { AuthOverlay, useAuthProfileReady, signOut } from 'deepspace'
+import { useAuthProfileReady, signOut } from 'deepspace'
+import { SignInOverlay } from './SignInOverlay'
 import { ChevronDown, LogOut } from 'lucide-react'
 import { BRAND } from '../brand'
 import type { Role } from '../constants'
@@ -157,7 +158,7 @@ export default function Navigation() {
         </div>
       </nav>
 
-      {showAuthModal && <AuthOverlay onClose={() => setShowAuthModal(false)} />}
+      {showAuthModal && <SignInOverlay onClose={() => setShowAuthModal(false)} />}
     </>
   )
 }
