@@ -386,35 +386,40 @@ Developer feedback: the effects are good, the "Dusk" colors look generic and AI-
 **Unsure about:**
 - The landing page (`/`) inherits these colors but wasn't screenshotted.
 **I verified myself (how):**
-- …
 
-## Phase 11: whole-app bug review, Mon Nov 23
-**Agent (Claude Code) did:**
-- Ran four read-only reviewers in parallel (server, pure logic, UI, schemas/config), then re-checked every finding in the code myself before changing anything. Details and IDs in NOTES "Phase 11 findings".
-- Fixed: E1 integration proxy now an allowlist with case-insensitive names (any signed-in account could otherwise call unlisted paid integrations, or `SerpApi/flights`, on the owner's bill); E2 lock re-checks every current traveler's fare (a late joiner could be locked out of a fare); E3 fitsAll privacy guard ignores $0 home fares; E4 ghost roster frozen during searches, no new ghosts on locked trips; E5 AI suggestions can't be a home airport; E6 animation fill mode (my own regression from Phase 10), settings form follows other devices, airport list closes on blur, demo labels on two more Book cards, `ready` gating; E7 date picker minimum vs the UTC-day rule; E8 line breaks in names become spaces.
-- New tests: 8 unit (ranking ×2, results, lock, ghosts, suggest, validate, next-step) and 3 api (proxy bypasses).
-- Results: `test run unit` 28 files / 445 passed; smoke+api (no real calls) 41 passed; e2e (no real calls) 58 passed; tsc 0; eslint 0. No real integration calls.
-**What broke / surprised me:**
-- Python-in-heredoc turned `\t`/`\n` in my replacement strings into real control characters in `validate.ts`; rewrote it from a script file and scanned the whole diff for control characters (none left).
-- One results test fixture omitted a fare row a real search always writes; kept the change minimal (newcomers are only added to cards saved as complete) instead of changing the fixture's meaning.
-**Unsure about:**
-- The proxy tests weren't run against the old code (that would forward requests upstream on the owner's account).
-- E9–E14 are recorded, not fixed; E9 is a SPEC §7/§8 conflict that needs your call.
-**I verified myself (how):**
-- …
 
-## Phase 11b: delete trip, sign-in wording, empty scroll, Tue Nov 24
-**Agent (Claude Code) did:**
-- **Empty scroll after the last card:** measured it with a throwaway spec (deleted). The fare-watch sparkline's `sr-only` list was positioned against the page, not the app's scroll box, so the document grew past the window (1699 px tall at 1280×800). `main` is now `relative`; after: the document is exactly the window, and `main` ends 24 px (its padding) after the content.
-- **"Sign in with email" but no sign-up:** DeepSpace has no email sign-up (the SDK documents the email form as for CLI/API test accounts, and the overlay can't hide it). The first Google/GitHub sign-in creates the account. New `SignInOverlay` with Halfway's title and a description saying that; the signed-out panel says it too.
-- **Delete trip (your ruling: delete only, not leave):** `deleteTrip` action (organizer; deletes every trip-scoped row, then the trip; refused while a search or check is in flight; keeps `usage` and `fareCache`). "Delete" button on your own trips in Your trips, with a confirm and a toast. SPEC §6 + changelog #57–58, README, NOTES F1–F3.
-- Tests: unit (cascade across every collection with a `tripId`, checked against the schema list independently of the action; permissions; in-flight refusals; stale search allowed), api (non-member `not_found`, member `forbidden`, organizer deletes on the real RecordRoom, then the invite is dead), e2e (two users: Bob has no button; Alice deletes; it disappears live for Bob; the trip URL is not-found).
-- Results: unit 28 files / 449 passed; smoke+api 42 passed; e2e 60 passed; tsc 0; eslint 0. No real integration calls.
-**What broke / surprised me:**
-- My first cascade test built its expected list from the action's own constant, so dropping `budgets` from the action still passed. Rewrote it with an independent list plus a schema check; the same mutation then failed 2 tests.
-- e2e flakes while DeepSpace's hosted sign-in was slow: `/api/auth/token` returned HTTP 500 once, and pages waited > 5 s for auth. Gave the six first-load `/join` assertions the suite's usual 15 s.
-- The budget-privacy e2e flagged a frame from another test's trip because a record id contained the digits "437" (the test budget). Not a leak: the frame was a candidate update with no budget field. The check now matches the amount only as a standalone number (`maxUsd:437`, `$437`, `437.5` still caught).
-**Unsure about:**
-- Delete isn't covered against the cron enqueueing a watch run in the instant between the check and the delete (NOTES F1).
-**I verified myself (how):**
-- …
+## My own verification — Tue Nov 24 (done by me, not the agent)
+**Checked on the live site / locally:**
+- Demo trip on https://halfway-pearl.app.space: results appeared, the demo label was on the
+  cards, the sort tabs reordered, locking showed "Emails are off in demo trips".
+- Live sync: two browsers on one trip; changing my airports updated the other window without
+  a reload.
+- Broke a test on purpose (an expected value in src/lib/ranking.test.ts): unit tests failed;
+  restored and they passed.
+- Changed the budgets read rule from 'own' to true: the permissions test failed; restored.
+  `git status` clean afterwards.
+- Real (non-demo) trip during the SerpApi outage: Find fares showed the "temporarily
+  unavailable" banner and the rest of the trip kept working. Screenshot saved.
+- Budget privacy: set my budget to 8361; searched the second account's WebSocket messages
+  for 8361: no match.
+- Ran scripts/live-check/cron-history.mjs after 9 AM ET: fare-watch succeeded on Nov 23 and
+  Nov 24.
+- Reported the SerpApi outage to DeepSpace (Nov 21, follow-up Nov 23). They confirmed it's on
+  their side and will take it into account in review.
+
+**Found while testing, and directed the agent to fix:**
+- Sign-in only offered "sign in with email", which looked like there was no way to sign up.
+  DeepSpace only supports Google/GitHub sign-up (email is for test accounts), so I had the
+  wording changed to explain that the first Google/GitHub sign-in creates the account.
+- The demo trip page could scroll into empty space after the last card; fixed (a hidden
+  screen-reader list was stretching the page).
+- Asked for leave-trip and delete-trip. Chose to ship only organizer delete-trip (keeps
+  spending records so limits can't be reset); left leave-trip for later because it needs a
+  data-model change on live data the day of the deadline.
+
+**Decisions I made along the way:**
+- Approved or rejected every agent proposal (NOTES decisions and per-phase rulings).
+- Caught that the agent's flagged mismatch (outage refund) was my own wrong ruling summary,
+  and had it fixed.
+- Froze the code and documented E9–E14 as known limitations instead of fixing them before
+  the deadline. 
