@@ -6,9 +6,9 @@
  */
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useAuth, useMutations, useQuery } from 'deepspace'
-import { CalendarDays, ChevronRight, FlaskConical, PlaneTakeoff, UserPlus, Users } from 'lucide-react'
-import { Badge, Button, Input, Label, Textarea, cn } from '@/components/ui'
+import { useAuth, useMutations, useQuery, type RecordData } from 'deepspace'
+import { CalendarDays, ChevronRight, FlaskConical, PlaneTakeoff, Trash2, UserPlus, Users } from 'lucide-react'
+import { Badge, Button, ConfirmModal, Input, Label, Textarea, cn, useToast } from '@/components/ui'
 import { ErrorState, LoadingState, Retryable } from '@/components/AsyncState'
 import { useAction } from '@/hooks/useAction'
 import { isRetryable } from '@/lib/actions-client'
@@ -44,6 +44,23 @@ export default function TripsPage() {
 function MyTrips({ onRetry }: { onRetry: () => void }) {
   const { userId } = useAuth()
   const { records, status, error } = useQuery<TripData>('trips', { limit: 100 })
+  const { ready } = useMutations('trips')
+  const toast = useToast()
+  const remove = useAction<{ tripId: string }>('deleteTrip')
+  const [deleting, setDeleting] = useState<RecordData<TripData> | null>(null)
+
+  async function confirmDelete() {
+    if (!deleting) return
+    const name = deleting.data.name
+    const res = await remove.run({ tripId: deleting.recordId })
+    if (!res) return
+    if (res.success) {
+      toast.success(`Deleted ${name}`)
+      setDeleting(null)
+    } else {
+      toast.error(`Could not delete ${name}`, res.error)
+    }
+  }
 
   if (status === 'loading') return <LoadingState label="Loading your trips…" />
   if (status === 'error') {
@@ -90,11 +107,19 @@ function MyTrips({ onRetry }: { onRetry: () => void }) {
       </h2>
       <ul className="flex flex-col gap-3" data-testid="trip-list">
         {sorted.map((trip) => (
-          <li key={trip.recordId}>
+          // The lift is on the <li> so the card and its delete button (which
+          // can't sit inside the link) rise together.
+          <li
+            key={trip.recordId}
+            className="relative transition-transform duration-150 motion-safe:hover:-translate-y-0.5"
+          >
             <Link
               to={`/t/${trip.recordId}`}
               data-testid="trip-card"
-              className="surface surface-interactive group relative flex items-center gap-4 overflow-hidden p-4 pl-5"
+              className={cn(
+                'surface group relative flex items-center gap-4 overflow-hidden p-4 pl-5 transition-[border-color,box-shadow] duration-150 hover:border-primary/40 hover:shadow-[0_6px_16px_-8px_rgba(28,39,51,0.28)]',
+                trip.data.organizerId === userId && 'pr-16',
+              )}
             >
               <span aria-hidden className={cn('absolute inset-y-0 left-0 w-1.5', STATUS_STRIPE[trip.data.status])} />
               <span
@@ -126,9 +151,33 @@ function MyTrips({ onRetry }: { onRetry: () => void }) {
                 aria-hidden
               />
             </Link>
+            {trip.data.organizerId === userId && (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="absolute right-3 top-1/2 -translate-y-1/2 hover:bg-destructive/10 hover:text-destructive"
+                aria-label={`Delete ${trip.data.name}`}
+                title="Delete trip"
+                disabled={!ready}
+                onClick={() => setDeleting(trip)}
+                data-testid="delete-trip"
+              >
+                <Trash2 aria-hidden />
+              </Button>
+            )}
           </li>
         ))}
       </ul>
+      <ConfirmModal
+        open={deleting !== null}
+        onClose={() => setDeleting(null)}
+        onConfirm={() => void confirmDelete()}
+        loading={remove.pending}
+        title={`Delete ${deleting?.data.name ?? 'this trip'}?`}
+        description="This removes the trip for everyone on it: its destinations, fares, votes, budgets and booking checklist. It can’t be undone."
+        confirmText="Delete trip"
+      />
     </section>
   )
 }

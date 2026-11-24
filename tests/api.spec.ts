@@ -153,6 +153,7 @@ const ACTIONS = [
   'setWatch',
   'checkFaresNow',
   'createDemoTrip',
+  'deleteTrip',
   '__testLockTrip',
 ]
 
@@ -213,6 +214,7 @@ test.describe('trip actions across two accounts', () => {
       ['addGhost', { tripId, displayName: 'Intruder', homeAirports: ['BNA'] }],
       ['updateGhost', { tripId, ghostId, displayName: 'Hijacked' }],
       ['removeGhost', { tripId, ghostId }],
+      ['deleteTrip', { tripId }],
     ] as const
     for (const [name, params] of outsider) {
       expect(await act(bobToken, name, params), name).toMatchObject({ success: false, code: 'not_found' })
@@ -237,6 +239,11 @@ test.describe('trip actions across two accounts', () => {
 
     // The ghost survived every attempt; the organizer can still remove it.
     expect(await act(aliceToken, 'removeGhost', { tripId, ghostId })).toMatchObject({ success: true })
+
+    // The organizer deletes the trip (real RecordRoom deleteWhere): it's gone for everyone.
+    expect(await act(aliceToken, 'deleteTrip', { tripId })).toMatchObject({ success: true })
+    expect(await act(bobToken, 'joinTrip', { inviteCode })).toMatchObject({ success: false, code: 'not_found' })
+    expect(await act(aliceToken, 'deleteTrip', { tripId })).toMatchObject({ success: false, code: 'not_found' })
   })
 
   test('a malformed body is a 400, not a crash', async ({ users, baseURL }) => {

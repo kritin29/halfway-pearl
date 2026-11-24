@@ -4,6 +4,8 @@ import type { Env } from '../../worker'
 import { createFakeStore, type FakeStore } from '../server/testing/fake-tools'
 import { TRIP_SCOPED_COLLECTIONS } from '../server/trip-rows'
 import { addGhost, removeGhost, updateGhost } from './ghosts'
+import { deleteTrip, TRIP_COLLECTIONS } from './delete-trip'
+import { schemas } from '../schemas'
 import { actions } from './index'
 import { createTrip, joinTrip, newInviteCode, previewInvite, seatOrder, testLockTrip } from './trips'
 
@@ -52,7 +54,7 @@ afterEach(() => {
 })
 
 describe('registry', () => {
-  it('exposes exactly the phase 3-7 actions plus createDemoTrip', () => {
+  it('exposes exactly the phase 3-7 actions plus createDemoTrip and deleteTrip', () => {
     expect(Object.keys(actions).sort()).toEqual(
       [
         '__testLockTrip',
@@ -62,6 +64,7 @@ describe('registry', () => {
         'checkFaresNow',
         'createDemoTrip',
         'createTrip',
+        'deleteTrip',
         'joinTrip',
         'lockTrip',
         'previewInvite',
@@ -459,3 +462,75 @@ describe('__testLockTrip (test seam)', () => {
     expect(tripRow(real.tripId).data.status).toBe('gathering')
   })
 })
+
+describe('deleteTrip', () => {
+  // Written out independently of TRIP_COLLECTIONS, so dropping one from the
+  // action fails this test instead of quietly shrinking what it checks.
+  const TRIP_SCOPED = ['votes', 'fares', 'fareSnapshots', 'candidates', 'budgets', 'emailLog', 'travelers']
+
+  it('TRIP_COLLECTIONS covers every schema with a tripId column', () => {
+    const withTripId = schemas
+      .filter((c) => c.name !== 'trips' && c.columns.some((col) => col.name === 'tripId'))
+      .map((c) => c.name)
+      .sort()
+    expect(withTripId).toEqual([...TRIP_SCOPED].sort())
+    expect([...TRIP_COLLECTIONS].sort()).toEqual([...TRIP_SCOPED].sort())
+  })
+
+  /** One row in every trip-scoped collection, for `tripId`. */
+  function seedEverything(tripId: string, tag: string) {
+    for (const collection of TRIP_SCOPED) {
+      if (collection === 'travelers') continue // createTrip/joinTrip made real ones
+      store.seed(collection, `${collection}-${tag}`, { tripId, userId: BOB, key: `k-${tag}` }, BOB)
+    }
+  }
+  const rowsFor = (tripId: string) =>
+    [...TRIP_SCOPED, 'trips'].flatMap((c) =>
+      store.rows(c).filter((r) => r.data.tripId === tripId || (c === 'trips' && r.recordId === tripId)),
+    )
+
+  it('removes the trip and every row that belongs to it, and nothing from another trip', async () => {
+    const mine = await aliceTrip()
+    await call(joinTrip, BOB, { inviteCode: mine.inviteCode })
+    const other = await aliceTrip()
+    seedEverything(mine.tripId, 'a')
+    seedEverything(other.tripId, 'b')
+    const usageBefore = store.rows('usage').length
+    expect(usageBefore).toBeGreaterThan(0) // createTrip counted the trips
+
+    const res = data<{ tripId: string; deleted: number }>(await call(deleteTrip, ALICE, { tripId: mine.tripId }))
+    expect(res.tripId).toBe(mine.tripId)
+    expect(res.deleted).toBe(TRIP_SCOPED.length - 1 + 2) // one seeded row each + Alice's and Bob's traveler rows
+    expect(rowsFor(mine.tripId)).toEqual([])
+    expect(rowsFor(other.tripId).length).toBeGreaterThan(TRIP_SCOPED.length - 1)
+    expect(store.rows('usage')).toHaveLength(usageBefore) // the spend ledger stays
+    expect(await call(deleteTrip, ALICE, { tripId: mine.tripId })).toMatchObject({ code: 'not_found' })
+  })
+
+  it('only the organizer can delete; outsiders see not_found; params validated', async () => {
+    const { tripId, inviteCode } = await aliceTrip()
+    await call(joinTrip, BOB, { inviteCode })
+    expect(await call(deleteTrip, BOB, { tripId })).toMatchObject({ code: 'forbidden' })
+    expect(await call(deleteTrip, CAROL, { tripId })).toMatchObject({ code: 'not_found' })
+    expect(await call(deleteTrip, ALICE, { tripId: 'bad id!' })).toMatchObject({ code: 'invalid_params' })
+    expect(tripRow(tripId)).toBeDefined()
+    expect(travelersOf(tripId)).toHaveLength(2)
+  })
+
+  it('is refused while a search or a fare check is running, and allowed once a search is stuck', async () => {
+    const { tripId } = await aliceTrip()
+    await store.toolsFor(ALICE).update('trips', tripId, { status: 'searching' })
+    expect(await call(deleteTrip, ALICE, { tripId })).toMatchObject({ code: 'search_running' })
+
+    await store.toolsFor(ALICE).update('trips', tripId, { status: 'results', watchQueuedAt: new Date().toISOString() })
+    expect(await call(deleteTrip, ALICE, { tripId })).toMatchObject({ code: 'watch_running' })
+    expect(tripRow(tripId)).toBeDefined()
+
+    // A search whose row hasn't moved for 20+ minutes is stuck, not running.
+    await store.toolsFor(ALICE).update('trips', tripId, { status: 'searching', watchQueuedAt: null })
+    vi.setSystemTime(new Date(Date.now() + 21 * 60 * 1000))
+    data(await call(deleteTrip, ALICE, { tripId }))
+    expect(rowsFor(tripId)).toEqual([])
+  })
+})
+
