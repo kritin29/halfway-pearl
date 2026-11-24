@@ -402,3 +402,19 @@ Developer feedback: the effects are good, the "Dusk" colors look generic and AI-
 - E9–E14 are recorded, not fixed; E9 is a SPEC §7/§8 conflict that needs your call.
 **I verified myself (how):**
 - …
+
+## Phase 11b: delete trip, sign-in wording, empty scroll, Tue Nov 24
+**Agent (Claude Code) did:**
+- **Empty scroll after the last card:** measured it with a throwaway spec (deleted). The fare-watch sparkline's `sr-only` list was positioned against the page, not the app's scroll box, so the document grew past the window (1699 px tall at 1280×800). `main` is now `relative`; after: the document is exactly the window, and `main` ends 24 px (its padding) after the content.
+- **"Sign in with email" but no sign-up:** DeepSpace has no email sign-up (the SDK documents the email form as for CLI/API test accounts, and the overlay can't hide it). The first Google/GitHub sign-in creates the account. New `SignInOverlay` with Halfway's title and a description saying that; the signed-out panel says it too.
+- **Delete trip (your ruling: delete only, not leave):** `deleteTrip` action (organizer; deletes every trip-scoped row, then the trip; refused while a search or check is in flight; keeps `usage` and `fareCache`). "Delete" button on your own trips in Your trips, with a confirm and a toast. SPEC §6 + changelog #57–58, README, NOTES F1–F3.
+- Tests: unit (cascade across every collection with a `tripId`, checked against the schema list independently of the action; permissions; in-flight refusals; stale search allowed), api (non-member `not_found`, member `forbidden`, organizer deletes on the real RecordRoom, then the invite is dead), e2e (two users: Bob has no button; Alice deletes; it disappears live for Bob; the trip URL is not-found).
+- Results: unit 28 files / 449 passed; smoke+api 42 passed; e2e 60 passed; tsc 0; eslint 0. No real integration calls.
+**What broke / surprised me:**
+- My first cascade test built its expected list from the action's own constant, so dropping `budgets` from the action still passed. Rewrote it with an independent list plus a schema check; the same mutation then failed 2 tests.
+- e2e flakes while DeepSpace's hosted sign-in was slow: `/api/auth/token` returned HTTP 500 once, and pages waited > 5 s for auth. Gave the six first-load `/join` assertions the suite's usual 15 s.
+- The budget-privacy e2e flagged a frame from another test's trip because a record id contained the digits "437" (the test budget). Not a leak: the frame was a candidate update with no budget field. The check now matches the amount only as a standalone number (`maxUsd:437`, `$437`, `437.5` still caught).
+**Unsure about:**
+- Delete isn't covered against the cron enqueueing a watch run in the instant between the check and the delete (NOTES F1).
+**I verified myself (how):**
+- …

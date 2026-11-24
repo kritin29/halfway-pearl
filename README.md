@@ -217,7 +217,7 @@ Source control is plain Git with GitHub as the source of truth (the DeepSpace cl
 - **The cron's run history is public.** Anyone can open a token-less socket to `/ws/cron/app:<appId>` and read the task's schedule and recent runs: start time, success, duration and error text (writes are refused). By design, a failed cron task or job only ever reports a generic message such as `fare-watch failed: storage error at "query watched trips"`, never a trip name, email, budget or user id (`src/lib/safe-error.ts`, tested in `src/server/safe-errors.test.ts`). `scripts/live-check/cron-history.mjs` reads it.
 - **Demo prices are illustrative.** They come from a hand-made fixture, not observed fares, and are fixed per route, so a demo never shows a price drop.
 - **Real email delivery is unconfirmed.** The one real send was accepted by the platform, but the test address is on the reserved `@deepspace.test` domain.
-- **Read access by `createdBy`.** On collections without an `ownerField` (candidates, fares, fareSnapshots), the row's creator keeps read access. Harmless today because nobody can leave a trip.
+- **Read access by `createdBy`.** On collections without an `ownerField` (candidates, fares, fareSnapshots), the row's creator keeps read access. Harmless today because nobody can leave a trip. Deleting a trip removes the rows, so it doesn't have this problem.
 - **Times are outbound-only** (return legs need a second request per itinerary), so red-eye and arrival alignment use the outbound flight; prices are round-trip.
 - **Fonts load from Google Fonts**, so visitors' browsers make a request to Google.
 - **Open issues from the final review** (details and IDs in `NOTES.md`, Phase 11):
@@ -234,7 +234,7 @@ Source control is plain Git with GitHub as the source of truth (the DeepSpace cl
 1. Re-run the single approved SerpApi call when the quota is back and reconcile `src/lib/flights.ts` with the real response.
 2. Hotels total per destination (`serpapi/hotels`), behind its own caps.
 3. Flexible dates (±1 day) and a "nudge the unbooked" reminder email.
-4. Leave trip and delete trip (needs `ownerField: 'tripId'` on the server-written collections first, and a cascading `deleteTrip`).
+4. Leave trip (needs `ownerField: 'tripId'` on the server-written collections first, and recomputed totals). Delete trip is built: the organizer's "Delete" on Your trips.
 5. Load-test the concurrency paths against real Durable Objects.
 
 ---

@@ -72,7 +72,7 @@ All trip-scoped collections include `tripId` (text) and `memberIds` (text, `{kin
 
 **Column types.** Dates: `storage:'text', {kind:'date'}` (ISO `YYYY-MM-DD`). Datetimes: text ISO. JSON arrays: `{kind:'json'}`. 0/1 flags: `storage:'number'`.
 
-**Known limitation (createdBy).** `'collaborator'` read = owner OR in `memberIds`, and on collections without `ownerField` (candidates, fares, fareSnapshots) the owner is `createdBy`: the member whose action created the row, or the app owner for rows the job created. A creator would keep read access to that row after leaving a trip. We are not building leave-trip, so this is accepted. (If it is ever built, set `ownerField: 'tripId'` on those collections so only `memberIds` counts.)
+**Known limitation (createdBy).** `'collaborator'` read = owner OR in `memberIds`, and on collections without `ownerField` (candidates, fares, fareSnapshots) the owner is `createdBy`: the member whose action created the row, or the app owner for rows the job created. A creator would keep read access to that row after leaving a trip. We are not building leave-trip, so this is accepted. (If it is ever built, set `ownerField: 'tripId'` on those collections so only `memberIds` counts.) `deleteTrip` doesn't have this problem: it deletes the rows, so nobody keeps access through `createdBy`.
 
 ### `trips`
 | column | type | notes |
@@ -160,7 +160,8 @@ Every action: (1) load the trip with `tools.get`, (2) check the caller is in `me
 |---|---|---|
 | `createTrip({name, outboundDate, returnDate, vibe})` | any signed-in | creates trip (memberIds=[caller]), inviteCode, caller's traveler row. Cap: 10 trips per user per UTC day (`usage`, `cap_reached`) |
 | `joinTrip({inviteCode})` | any signed-in | adds caller to trip.memberIds, creates traveler row, **propagates new memberIds to every trip-scoped row** (travelers, candidates, fares, votes, fareSnapshots). Idempotent. Max 8 travelers incl. ghosts. Refuses newcomers to a locked trip (`trip_locked`) |
-| `addGhost({tripId, displayName, homeAirports, ...})` / `updateGhost` / `removeGhost` | organizer | ghost traveler rows |
+| `addGhost({tripId, displayName, homeAirports, ...})` / `updateGhost` / `removeGhost` | organizer | ghost traveler rows. `addGhost`/`removeGhost` refuse `search_running` while searching; `addGhost` refuses `trip_locked` |
+| `deleteTrip({tripId})` | organizer | deletes every row with that `tripId` (votes, fares, fareSnapshots, candidates, budgets, emailLog, travelers), then the trip row; refuses `search_running` while a search runs (unless stale) and `watch_running` while a check is queued. Keeps `usage` (spend ledger) and `fareCache` (per route). The "Delete" button on Your trips, with a confirm |
 | `addCandidate({tripId, iata})` | member | validates IATA against `src/data/airports.json`; max 6 (`candidates_full`); no duplicates (`duplicate`); source `manual` |
 | `suggestCandidates({tripId})` | organizer | AI (`claude-haiku-5-5`, `max_tokens` 3000, JSON-only system prompt; prompt = each traveler's home airports (IATA + city, no names), dates, vibe, existing candidates) → defensive JSON parse (`src/lib/suggest.ts`) → keep IATAs in airports.json, not already listed → insert up to (6 − existing), source `ai`. City/country from airports.json, `why` ≤ 140 chars. Needs ≥ 1 traveler with airports (`needs_airports`). Cap: 5 AI calls per user per day (`usage`, `cap_reached`), checked before the call. Provider failures classified like flights: `provider_unavailable` (quota/429, not counted) vs `ai_error` (counted) |
 | `addMidpointHubs({tripId})` | organizer | deterministic: centroid of travelers' home airports (lat/lon) → nearest 2 "major" airports not already candidates or home airports, up to the free slots; source `midpoint`. Needs ≥ 2 travelers with airports (`needs_airports`) |
@@ -388,3 +389,9 @@ Why: live fares have been unavailable for the whole build. Every real `serpapi/f
 | 54 | Demo mode: `trips.isDemo` (immutable), `createDemoTrip` (3/user/day), fixture fares in every env for demo trips, no emails, no cron watch, label everywhere | §5 trips, §9, §14 | developer brief |
 | 55 | `startSearch`'s cap/count/enqueue tail extracted as `beginFullSearch` (shared with `createDemoTrip`); new error code `demo_trip` | §6, §14 | Phase 9 build |
 | 56 | Phase 9 decisions D5 approved. Cron history stays publicly readable; cron/job failures cross the boundary only as generic text (`src/lib/safe-error.ts`), never user data | §8, §9 | developer ruling (NOTES D3) |
+
+### 2026-11-24 — Phase 11 (whole-app review, delete trip)
+| # | Change | Where in this spec | From |
+|---|---|---|---|
+| 57 | `deleteTrip` (organizer): cascading delete of every trip-scoped row, then the trip; refused while a search or check is in flight. Leave-trip stays out (createdBy limitation) | §5 Known limitation, §6 | developer ruling |
+| 58 | Review fixes: `lockTrip` re-checks every current traveler has an ok fare; ghost roster frozen while searching, no new ghosts on locked trips; fitsAll minimum ignores $0 home fares; integration proxy is an allowlist (case-insensitive) | §6, §7, §11 | NOTES E1–E5 |
