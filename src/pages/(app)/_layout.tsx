@@ -34,7 +34,11 @@ export default function AppLayout() {
       <AuthBoot>
         <div className="flex h-screen flex-col bg-background overflow-hidden">
           <Navigation />
-          <main className="flex-1 overflow-y-auto min-h-0">
+          {/* `relative`: absolutely positioned descendants (e.g. `sr-only`
+              lists) must be clipped by this scroll box. Without it they're
+              placed against the page, stretch the document past the window
+              and leave empty space to scroll after the last card. */}
+          <main className="relative flex-1 overflow-y-auto min-h-0">
             <Suspense
               fallback={
                 <div className="flex h-full items-center justify-center text-muted-foreground">
