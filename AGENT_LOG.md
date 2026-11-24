@@ -388,6 +388,39 @@ Developer feedback: the effects are good, the "Dusk" colors look generic and AI-
 **I verified myself (how):**
 
 
+## Phase 11: whole-app bug review, Mon Nov 23
+**Agent (Claude Code) did:**
+- Ran four read-only reviewers in parallel (server, pure logic, UI, schemas/config), then re-checked every finding in the code myself before changing anything. Details and IDs in NOTES "Phase 11 findings".
+- Fixed: E1 integration proxy now an allowlist with case-insensitive names (any signed-in account could otherwise call unlisted paid integrations, or `SerpApi/flights`, on the owner's bill); E2 lock re-checks every current traveler's fare (a late joiner could be locked out of a fare); E3 fitsAll privacy guard ignores $0 home fares; E4 ghost roster frozen during searches, no new ghosts on locked trips; E5 AI suggestions can't be a home airport; E6 animation fill mode (my own regression from Phase 10), settings form follows other devices, airport list closes on blur, demo labels on two more Book cards, `ready` gating; E7 date picker minimum vs the UTC-day rule; E8 line breaks in names become spaces.
+- New tests: 8 unit (ranking ×2, results, lock, ghosts, suggest, validate, next-step) and 3 api (proxy bypasses).
+- Results: `test run unit` 28 files / 445 passed; smoke+api (no real calls) 41 passed; e2e (no real calls) 58 passed; tsc 0; eslint 0. No real integration calls.
+**What broke / surprised me:**
+- Python-in-heredoc turned `\t`/`\n` in my replacement strings into real control characters in `validate.ts`; rewrote it from a script file and scanned the whole diff for control characters (none left).
+- One results test fixture omitted a fare row a real search always writes; kept the change minimal (newcomers are only added to cards saved as complete) instead of changing the fixture's meaning.
+**Unsure about:**
+- The proxy tests weren't run against the old code (that would forward requests upstream on the owner's account).
+- E9–E14 are recorded, not fixed; E9 is a SPEC §7/§8 conflict that needs your call.
+**I verified myself (how):**
+- …
+
+## Phase 12: sign-up wording, empty scroll, delete trip, Tue Nov 24
+**Agent (Claude Code) did:**
+- **"Sign in with email" but no sign-up:** DeepSpace has no email sign-up (the SDK documents the overlay's email form as for CLI/API test accounts, and the overlay can't hide it). The first Google/GitHub sign-in creates the account. New `src/components/SignInOverlay.tsx` with Halfway's title and a description saying that; the signed-out panel says it too. NOTES F2.
+- **Empty scroll after the last card:** measured it with a throwaway spec (deleted). The fare-watch sparkline's `sr-only` list was positioned against the page, not the app's scroll box, so the document grew past the window (1699 px tall at 1280×800). `main` is now `relative`; after: the document is exactly the window, and `main` ends 24 px (its padding) after the content. NOTES F3.
+- **Delete trip (your ruling: delete only, not leave):** `deleteTrip` action (`src/actions/delete-trip.ts`; organizer; deletes every trip-scoped row, then the trip; refused while a search or check is in flight; keeps `usage` and `fareCache`). "Delete" button on your own trips in Your trips, with a confirm and a toast. SPEC §6 + changelog #57–58, README, NOTES F1.
+- Tests: unit (cascade across every collection with a `tripId`, checked against the schema list independently of the action; permissions; in-flight refusals; stale search allowed), api (non-member `not_found`, member `forbidden`, organizer deletes on the real RecordRoom, then the invite is dead), e2e (two users: Bob has no button; Alice deletes; it disappears live for Bob; the trip URL is not-found).
+- Results: `test run unit` 28 files / 449 passed; smoke+api (no real calls) 42 passed; e2e (no real calls) 60 passed; tsc 0; eslint 0. No real integration calls.
+**What broke / surprised me:**
+- My first cascade test built its expected list from the action's own constant, so dropping `budgets` from the action still passed. Rewrote it with an independent list plus a schema check; the same mutation then failed 2 tests.
+- e2e flakes while DeepSpace's hosted sign-in was slow: `/api/auth/token` returned HTTP 500 once, and pages waited > 5 s for auth. Gave the six first-load `/join` assertions the suite's usual 15 s.
+- The budget-privacy e2e flagged a frame from another test's trip because a record id contained the digits "437" (the test budget). Not a leak: the frame was a candidate update with no budget field. The check now matches the amount only as a standalone number (`maxUsd:437`, `$437`, `437.5` still caught).
+**Unsure about:**
+- Delete isn't covered against the cron enqueueing a watch run in the instant between the check and the delete (NOTES F1).
+- Leave trip is still not built (SPEC §5 createdBy limitation).
+**I verified myself (how):**
+- …
+
+
 ## My own verification — Tue Nov 24 (done by me, not the agent)
 **Checked on the live site / locally:**
 - Demo trip on https://halfway-pearl.app.space: results appeared, the demo label was on the
