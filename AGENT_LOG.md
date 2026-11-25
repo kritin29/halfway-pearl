@@ -451,8 +451,10 @@ Developer feedback: the effects are good, the "Dusk" colors look generic and AI-
   data-model change on live data the day of the deadline.
 
 **Decisions I made along the way:**
-- Approved or rejected every agent proposal (NOTES decisions and per-phase rulings).
-- Caught that the agent's flagged mismatch (outage refund) was my own wrong ruling summary,
-  and had it fixed.
-- Froze the code and documented E9–E14 as known limitations instead of fixing them before
-  the deadline. 
+- Reviewed every agent proposal and sent the rulings (drafted with Claude chat, decided by me).
+- Claude (chat) summarized one ruling backwards (whether provider outages use up a daily
+  search); Claude Code flagged the mismatch and I had the refund fixed.
+- Rejected the first redesign ("Dusk") because it looked generic and AI-made; had it replaced
+  with the "Timetable" palette.
+- Froze the code and documented E9–E14 as known limitations instead of fixing them before the
+  deadline.

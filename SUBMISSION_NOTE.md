@@ -27,20 +27,47 @@ Briefly, two others:
 The platform's shared SerpApi account has been out of searches for the whole build. All three real `serpapi/flights` calls (Nov 20, 21 and 23) returned `429 "Your account has run out of searches."` with billing released. So **no real flight response has been seen**, and `flights.ts` is built against SerpApi's published format and a hand-made fixture. Real trips show a plain-language outage banner. A search the outage stopped before fetching or being billed for anything is given back to the daily limit, and the rest of the app still works.
 **Demo mode** exists only so reviewers can see the full flow. "Try a demo trip" creates a trip with two ghost travelers, four destinations and sample fares from that fixture. Every demo screen and card says "Demo trip: sample prices, not live fares." Demo trips never call SerpApi or send email, aren't watched by the cron, can be created only by the server (3 per user per day), and their prices are cached per trip so they can't reach a real trip. Demo prices are illustrative, not observed.
 
+I reported the outage to DeepSpace on Nov 21 and followed up on Nov 23; they confirmed the provider issue is on their side and said they'll take it into account in review.
+
 ## What the agent did
-- **Claude (chat)** researched DeepSpace with me, wrote `SPEC.md`, `CLAUDE.md` and `PROMPTS.md`, and reviewed each phase's output.
-- **Claude Code** implemented phases 1–8 and demo mode, logging each phase in `AGENT_LOG.md` (what it did, what broke, open questions). Before writing code, it checked the spec against the installed SDK and docs and recorded conflicts in `NOTES.md`. Examples:
-  - `userBound` on `travelers.userId` would have stamped the organizer's id on ghost rows (C1).
-  - Permission blocks without an `admin` role would have locked the app owner out of their own trips (C2).
-  - The scaffold's integration proxy let any signed-in user call SerpApi or `email/send` directly, which would have made the app an owner-billed spam relay; it now returns 403 (C4).
-  - `email/send` ignores `from` and costs $0.013 per email, so email caps were added (C5).
-  - The planned 600-token AI budget was used up by Haiku's reasoning before any output (Q1).
-  - Most recently: the cron's run history, not `deepspace logs`, is the proof a scheduled run happened (D1).
+- **Claude (chat)** researched DeepSpace with me, wrote the plan (`SPEC.md`, `CLAUDE.md`,
+  `PROMPTS.md`), drafted each phase's prompt and reviewed each phase's output with me.
+- **Claude Code** built everything in phases (logged in `AGENT_LOG.md`): data model and
+  permissions, actions, the fare-search job, results, lock/book/emails, the fare watch, polish,
+  demo mode, two visual passes, a whole-app bug review and delete-trip. Before writing code it
+  checked the spec against the installed SDK and recorded conflicts in `NOTES.md`. Examples:
+  - `userBound` would have stamped the organizer's id on ghost travelers (C1).
+  - Permissions without an `admin` role would have locked the app owner out (C2).
+  - The scaffold's integration proxy let any signed-in user call SerpApi or `email/send` on
+    my bill (C4). Its final review found the block could still be bypassed by letter case
+    (`SerpApi/flights`), and replaced it with an allowlist (E1).
+  - The 600-token AI budget was used up by Haiku's reasoning before any output (Q1).
+  - The cron's run history, not `deepspace logs`, proves a scheduled run happened (D1).
+- It also caught its own mistakes: a permission test that passed even when broken, and an
+  earlier claim that cron errors were already free of user data (they weren't; fixed and
+  tested).
 
 ## What I verified or changed myself
-- _(to fill in)_
-- _(to fill in)_
-- _(to fill in)_
+- **Checked the agent's claims in the SDK:** read `worker.js` lines 1543–1545 to confirm that
+  a `userBound` column is overwritten with the acting user's id (why ghosts can't use it);
+  ran `integrations info` to confirm `email/send` ignores `from` and costs $0.013, and that the
+  AI endpoint defaults to Opus.
+- **Budget privacy by hand:** two accounts on one trip; set my budget to 8361 and searched the
+  other account's WebSocket messages for it: no match.
+- **Tests catch real bugs:** broke an expected value in `ranking.test.ts` and changed the
+  budgets read rule to `true`; tests failed both times; restored (`git status` clean).
+- **On the live site:** live sync between two browsers; the demo trip end to end (results,
+  sort tabs, labels, lock with emails off); a real trip showing the outage banner without
+  breaking anything.
+- **Cron:** read the production run history myself with `scripts/live-check/cron-history.mjs`
+  (fare-watch succeeded Nov 23 and Nov 24).
+- **Found while testing and had fixed:** sign-in looked like it had no sign-up (DeepSpace only
+  allows Google/GitHub sign-up, so I changed the wording); empty scroll at the bottom of the
+  demo page; added organizer delete-trip, and chose to leave out leave-trip because it needs
+  a data-model change on live data the day of the deadline.
+- **Directed the work:** reviewed and sent every phase's rulings, rejected a generic-looking
+  redesign, reported the SerpApi outage to DeepSpace, and froze the code to document E9–E14
+  instead of rushing fixes.
 
 ## Unfinished / next
 - Re-run the one approved SerpApi call when the quota returns and reconcile `flights.ts` with a real response.
@@ -48,4 +75,4 @@ The platform's shared SerpApi account has been out of searches for the whole bui
 - Concurrency (joins, the 6-destination limit, email claims, job retries) is tested with fakes, not under load on real Durable Objects.
 - Return-leg times aren't fetched (outbound only); real email delivery to an inbox is unconfirmed; phone layouts were checked in headless Chromium only.
 - Six open issues from the final review are documented with fixes (README "Known limitations", NOTES E9–E14). The main ones: a re-search during a provider outage can wipe earlier results, and removing a traveler can trigger a false price-drop email. Smaller ones: limits can be passed by clicking from several tabs at once, and a lock racing a new search from two tabs can undo the lock.
-- Next: hotels per destination, ±1-day flexible dates, a "nudge the unbooked" reminder, and leave/delete trip.
+- Next: leave trip (members), hotels per destination, ±1-day flexible dates, and a "nudge the unbooked" reminder.
